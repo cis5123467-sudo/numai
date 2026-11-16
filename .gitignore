@@ -1,0 +1,36 @@
+# NumWorks and ARM build output. Ship .nwa files as GitHub Release assets.
+/build/
+*.nwa
+*.elf
+*.bin
+*.o
+*.d
+*.map
+*.tmp
+
+# macOS, editors and local test environments
+.DS_Store
+.vscode/
+.idea/
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.coverage
+
+# Local configuration and credentials
+.env
+.env.*
+.envrc
+.secrets/
+secrets/
+credentials/
+credentials*.json
+secrets*.json
+.npmrc
+.netrc
+*.pem
+*.key
+*.p12
+*.pfx
