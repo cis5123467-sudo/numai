@@ -2,6 +2,7 @@
 
 #include <ctype.h>
 #include <math.h>
+#include <stdint.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -14,10 +15,15 @@
 
 typedef enum {
     Number, Variable, Add, Sub, Mul, Div, Pow, Sin, Cos, Tan, Exp, Ln, Log,
-    Sqrt, Abs, Asin, Acos, Atan, Choose, Permute, Binomial, Normal, Floor, Gcd
+    Sqrt, Abs, Asin, Acos, Atan, Choose, Permute, Binomial, Normal, Floor, Gcd, Min
 } Kind;
 
-typedef struct { double value; unsigned short left, right; Kind kind; } Node;
+typedef struct {
+    double value;
+    unsigned short left, right, literal_length;
+    Kind kind;
+    unsigned char literal_kind;
+} Node;
 typedef unsigned short Expr;
 typedef struct { double c[DEGREE + 1]; int degree; } Poly;
 typedef struct { const char *input; bool invalid; } Parser;
@@ -30,6 +36,7 @@ const char *const operation_names[] = {
 };
 
 static Node nodes[NODE_LIMIT];
+static const char *number_tokens[NODE_LIMIT];
 static Expr used;
 static bool too_complex, radians;
 static double stored_values[52];
@@ -45,7 +52,7 @@ static const struct { const char *name; Kind kind; int arity; } functions[] = {
     {"ln", Ln, 1}, {"log", Log, 1}, {"sqrt", Sqrt, 1}, {"abs", Abs, 1},
     {"asin", Asin, 1}, {"acos", Acos, 1}, {"atan", Atan, 1},
     {"ncr", Choose, 2}, {"npr", Permute, 2}, {"binom", Binomial, 3},
-    {"norm", Normal, 1}, {"floor", Floor, 1}, {"gcd", Gcd, 2}
+    {"norm", Normal, 1}, {"floor", Floor, 1}, {"gcd", Gcd, 2}, {"min", Min, 2}
 };
 
 static Expr make(Kind kind, Expr left, Expr right, double value) {
@@ -53,7 +60,7 @@ static Expr make(Kind kind, Expr left, Expr right, double value) {
         too_complex = true;
         return NO_NODE;
     }
-    nodes[++used] = (Node){value, left, right, kind};
+    nodes[++used] = (Node){.value=value,.left=left,.right=right,.kind=kind};
     return used;
 }
 
@@ -81,6 +88,7 @@ static double numeric(Kind kind, double a, double b, double c) {
         case Log: return log10(a);
         case Sqrt: return sqrt(a);
         case Abs: return fabs(a);
+        case Min: return isfinite(a) && isfinite(b) ? fmin(a, b) : NAN;
         case Asin: return asin(a) / angle;
         case Acos: return acos(a) / angle;
         case Atan: return atan(a) / angle;
@@ -148,19 +156,42 @@ static Expr atom(Parser *p) {
         return e;
     }
     const char *start = p->input;
+    if (start[0] == '0' && (start[1] == 'b' || start[1] == 'B')) {
+        const char *end = start+2;
+        double value = 0;
+        while (*end == '0' || *end == '1') value = 2*value + *end++ - '0';
+        if (end != start+2 && isfinite(value)) {
+            p->input = end;
+            return number(value);
+        }
+    }
     if (isdigit((unsigned char)*start) || *start == '.') {
         char *end;
         double value = strtod(start, &end);
         if (end != start && isfinite(value)) {
             p->input = end;
-            return number(value);
+            if (end > start+2 && start[0] == '0' && (start[1] == 'x' || start[1] == 'X'))
+                return number(value);
+            Expr e = number(value);
+            if (e) {
+                number_tokens[e] = start;
+                nodes[e].literal_length = (unsigned short)(end-start);
+            }
+            return e;
         }
     }
     if (*start == 'x') { p->input++; return make(Variable, 0, 0, 0); }
-    if (strncmp(start, "pi", 2) == 0) { p->input += 2; return number(PI); }
+    if (strncmp(start, "pi", 2) == 0) {
+        p->input += 2;
+        Expr e = number(PI);
+        if (e) nodes[e].literal_kind=1;
+        return e;
+    }
     if (*start == 'e' && strncmp(start, "exp", 3) != 0) {
         p->input++;
-        return number(exp(1));
+        Expr e = number(exp(1));
+        if (e) nodes[e].literal_kind=2;
+        return e;
     }
     for (size_t i = 0; i < sizeof(functions) / sizeof(*functions); i++) {
         size_t len = strlen(functions[i].name);
@@ -181,7 +212,9 @@ static Expr atom(Parser *p) {
     int index = variable_index(*start);
     if (index >= 0 && stored[index]) {
         p->input++;
-        return number(stored_values[index]);
+        Expr e = number(stored_values[index]);
+        if (e) nodes[e].literal_kind=2;
+        return e;
     }
     p->invalid = true;
     return NO_NODE;
@@ -359,7 +392,7 @@ static void value_text(Writer *out, double value, bool decimal) {
     else print(out, "%.10g", value == 0 ? 0 : value);
 }
 
-static void poly_text(Writer *out, const Poly *p) {
+static void poly_text_variable(Writer *out, const Poly *p, char variable) {
     bool first = true;
     for (int i = p->degree; i >= 0; i--) {
         double c = p->c[i];
@@ -370,12 +403,14 @@ static void poly_text(Writer *out, const Poly *p) {
             value_text(out, fabs(c), false);
             if (i) append(out, "*");
         }
-        if (i) append(out, "x");
+        if (i) print(out, "%c", variable);
         if (i > 1) print(out, "^%d", i);
         first = false;
     }
     if (first) append(out, "0");
 }
+
+static void poly_text(Writer *out, const Poly *p) { poly_text_variable(out,p,'x'); }
 
 static int precedence(Kind k) {
     if (k == Add || k == Sub) return 1;
@@ -1066,4 +1101,416 @@ void solve_expression(Operation operation, const char *input, const char *second
 fail:
     solution->steps[0] = 0;
     snprintf(solution->answer, sizeof(solution->answer), "%s", error);
+}
+
+/* The calculation history keeps a proven exact rational, single surd or
+ * rational multiple of pi alongside the floating-point value for display. */
+typedef struct { int n, d, rad; } Exact;
+enum { ExactLimit = 1000000000 };
+
+static Exact exact_value(int64_t n, int64_t d, int rad) {
+    if (!d) return (Exact){0};
+    if (!n) return (Exact){0, 1, 1};
+    if (d < 0) { n = -n; d = -d; }
+    int64_t a = n < 0 ? -n : n, b = d;
+    while (b) { int64_t remainder = a % b; a = b; b = remainder; }
+    n /= a;
+    d /= a;
+    if (n < -ExactLimit || n > ExactLimit || d > ExactLimit) return (Exact){0};
+    return (Exact){(int)n, (int)d, rad};
+}
+
+static Exact exact_literal(const char *text, int length) {
+    int64_t n = 0, d = 1;
+    int decimals = 0, exponent = 0, sign = 1, i = 0;
+    bool dot = false;
+    for (; i < length && text[i] != 'e' && text[i] != 'E'; i++) {
+        if (text[i] == '.') { dot = true; continue; }
+        if (!isdigit((unsigned char)text[i]) || n > INT64_C(100000000000000000))
+            return (Exact){0};
+        n = 10*n + text[i] - '0';
+        decimals += dot;
+    }
+    if (i < length) {
+        i++;
+        if (text[i] == '-' || text[i] == '+') sign = text[i++] == '-' ? -1 : 1;
+        for (; i < length && exponent <= 40; i++) exponent = 10*exponent + text[i] - '0';
+        if (exponent > 40) return (Exact){0};
+    }
+    if (!n) return (Exact){0, 1, 1};
+    int shift = decimals - sign*exponent;
+    while (shift > 0 && n % 10 == 0) { n /= 10; shift--; }
+    if (shift > 9 || shift < -9) return (Exact){0};
+    for (; shift > 0; shift--) d *= 10;
+    for (; shift < 0; shift++) {
+        if (n > ExactLimit/10) return (Exact){0};
+        n *= 10;
+    }
+    return exact_value(n, d, 1);
+}
+
+static Exact exact_root(Exact a) {
+    if (!a.d || a.rad != 1 || a.n < 0) return (Exact){0};
+    if (!a.n) return a;
+    unsigned outside = 1, inside = 1;
+    unsigned top = (unsigned)a.n, bottom = (unsigned)a.d;
+    // Factoring the numerator and denominator separately keeps the loop bounded.
+    for (unsigned p = 2; p*p <= top || p*p <= bottom; p++) {
+        unsigned count = 0;
+        while (top % p == 0) { top /= p; count++; }
+        while (bottom % p == 0) { bottom /= p; count++; }
+        for (unsigned j = 0; j < count/2; j++) {
+            if (outside > (unsigned)ExactLimit/p) return (Exact){0};
+            outside *= p;
+        }
+        if (count % 2) {
+            if (inside > (unsigned)ExactLimit/p) return (Exact){0};
+            inside *= p;
+        }
+    }
+    if (top == bottom) {
+        if (outside > (unsigned)ExactLimit/top) return (Exact){0};
+        outside *= top;
+    } else {
+        if ((uint64_t)inside*top*bottom > ExactLimit) return (Exact){0};
+        inside *= top*bottom;
+    }
+    return exact_value(outside, a.d, (int)inside);
+}
+
+static Exact exact_product(Exact a, Exact b, bool divide) {
+    if (!a.d || !b.d || (divide && !b.n)) return (Exact){0};
+    if (!a.n || (!divide && !b.n)) return (Exact){0, 1, 1};
+    int64_t n = (int64_t)a.n*(divide ? b.d : b.n);
+    int64_t d = (int64_t)a.d*(divide ? b.n : b.d);
+    if (!a.rad || !b.rad) {
+        if (divide && a.rad == b.rad) return exact_value(n, d, 1);
+        if ((a.rad == 0 && b.rad == 1) || (!divide && a.rad == 1 && b.rad == 0))
+            return exact_value(n, d, 0);
+        return (Exact){0};
+    }
+    if (a.rad == b.rad) {
+        if (!divide) {
+            Exact product = exact_value(n, d, 1);
+            return product.d ? exact_value((int64_t)product.n*a.rad, product.d, 1) : product;
+        }
+        return exact_value(n, d, 1);
+    }
+    unsigned common = gcd((unsigned)a.rad, (unsigned)b.rad);
+    int64_t rad = (int64_t)(a.rad/common)*(b.rad/common);
+    if (rad > ExactLimit) return (Exact){0};
+    Exact product = exact_value(n, d, (int)rad);
+    if (!product.d) return product;
+    return divide ? exact_value(product.n, (int64_t)product.d*(b.rad/common), product.rad) :
+                    exact_value((int64_t)product.n*common, product.d, product.rad);
+}
+
+static Exact exact_trig(Kind kind, Exact a) {
+    if (!a.d || (a.n && a.rad != (radians ? 0 : 1))) return (Exact){0};
+    int64_t numerator = radians ? (int64_t)a.n*12 : a.n;
+    int64_t denominator = radians ? a.d : 15LL*a.d;
+    if (numerator % denominator) return (Exact){0};
+    int turn = (int)((numerator/denominator)%24);
+    if (turn < 0) turn += 24;
+    if (kind == Tan)
+        return exact_product(exact_trig(Sin, a), exact_trig(Cos, a), true);
+    if (kind == Cos) turn = (turn + 6)%24;
+    int sign = turn > 12 ? -1 : 1;
+    turn %= 12;
+    if (turn > 6) turn = 12 - turn;
+    switch (turn) {
+        case 0: return (Exact){0, 1, 1};
+        case 2: return (Exact){sign, 2, 1};
+        case 3: return (Exact){sign, 2, 2};
+        case 4: return (Exact){sign, 2, 3};
+        case 6: return (Exact){sign, 1, 1};
+        default: return (Exact){0};
+    }
+}
+
+static Exact exact_expression(Expr e) {
+    if (!e) return (Exact){0};
+    Node v = nodes[e];
+    if (v.kind == Number) {
+        if (v.literal_kind == 1) return (Exact){1, 1, 0};
+        if (v.literal_kind) return (Exact){0};
+        if (v.literal_length) return exact_literal(number_tokens[e], v.literal_length);
+        return fabs(v.value) <= ExactLimit && trunc(v.value) == v.value ?
+               (Exact){(int)v.value, 1, 1} : (Exact){0};
+    }
+    Exact a = exact_expression(v.left);
+    if (!a.d) return a;
+    if (v.kind == Sqrt) return exact_root(a);
+    if (v.kind == Sin || v.kind == Cos || v.kind == Tan) return exact_trig(v.kind, a);
+    if (v.kind == Abs) return (Exact){abs(a.n), a.d, a.rad};
+    if (v.kind < Add || v.kind > Pow) {
+        double value = evaluate(e, 0);
+        if ((v.kind == Floor || v.kind == Gcd || v.kind == Choose || v.kind == Permute) &&
+            isfinite(value) && fabs(value) <= ExactLimit && value == trunc(value))
+            return (Exact){(int)value, 1, 1};
+        return (Exact){0};
+    }
+    Exact b = exact_expression(v.right);
+    if (!b.d) return b;
+    if (v.kind == Mul || v.kind == Div) return exact_product(a, b, v.kind == Div);
+    if (v.kind == Add || v.kind == Sub) {
+        if (v.kind == Sub) b.n = -b.n;
+        if (!a.n) return b;
+        if (!b.n) return a;
+        return a.rad == b.rad ? exact_value((int64_t)a.n*b.d + (int64_t)b.n*a.d,
+                                            (int64_t)a.d*b.d, a.rad) : (Exact){0};
+    }
+    if (b.rad != 1) return (Exact){0};
+    if (b.n == 1 && b.d == 2) return exact_root(a);
+    if (b.d != 1 || abs(b.n) > 32) return (Exact){0};
+    Exact result = {1, 1, 1};
+    for (int i = 0; i < abs(b.n) && result.d; i++) result = exact_product(result, a, b.n < 0);
+    return result;
+}
+
+bool cas_calculation(const char *input, bool degrees, CalculationValue *result) {
+    *result = (CalculationValue){.degrees = degrees};
+    used = 0;
+    too_complex = false;
+    radians = !degrees;
+    Expr e = parse(input, false);
+    if (!constant(e)) return false;
+    result->value = evaluate(e, 0);
+    if (!isfinite(result->value)) return false;
+    result->numeric = true;
+    Node top = nodes[e];
+    if (top.kind == Sqrt || top.kind == Sin || top.kind == Cos || top.kind == Tan) {
+        result->argument = evaluate(top.left, 0);
+        Exact argument = exact_expression(top.left);
+        result->argument_n = argument.n;
+        result->argument_d = argument.d;
+        result->argument_rad = argument.rad;
+        result->kind = top.kind == Sqrt ? ExtraRoot : top.kind == Sin ? ExtraSin :
+                       top.kind == Cos ? ExtraCos : ExtraTan;
+    }
+    Exact exact = exact_expression(e);
+    if (!exact.d) return true;
+    result->numerator = exact.n;
+    result->denominator = exact.d;
+    result->radicand = exact.rad;
+    Writer out = {result->exact, sizeof(result->exact), 0};
+    if (exact.rad == 1) print(&out, "%d", exact.n);
+    else {
+        if (exact.d != 1) append(&out, "(");
+        if (exact.n < 0) append(&out, "-");
+        if (abs(exact.n) != 1) print(&out, "%d*", abs(exact.n));
+        if (exact.rad == 0) append(&out, "pi");
+        else print(&out, "sqrt(%d)", exact.rad);
+        if (exact.d != 1) append(&out, ")");
+    }
+    if (exact.d != 1) print(&out, "/%d", exact.d);
+    return true;
+}
+
+typedef struct { Kind kind; double scale, shift; bool found; } TrigAngle;
+
+static bool trig_polynomial(Expr e, TrigAngle *angle, Poly *out) {
+    if (!e) return false;
+    Node v = nodes[e];
+    if (constant(e)) {
+        double value = evaluate(e, 0);
+        if (!isfinite(value)) return false;
+        *out = (Poly){.c={value}};
+        return true;
+    }
+    if (v.kind == Sin || v.kind == Cos || v.kind == Tan) {
+        Poly p;
+        if (!polynomial(v.left, &p) || p.degree != 1 || !finite_poly(&p)) return false;
+        if (angle->found && (angle->kind != v.kind || angle->scale != p.c[1] || angle->shift != p.c[0]))
+            return false;
+        *angle = (TrigAngle){v.kind,p.c[1],p.c[0],true};
+        *out = (Poly){.c={0,1},.degree=1};
+        return true;
+    }
+    if (v.kind < Add || v.kind > Pow || !trig_polynomial(v.left, angle, out)) return false;
+    if (v.kind == Pow) {
+        double power = evaluate(v.right, NAN);
+        if (power == 0) { *out = (Poly){.c={1}}; return true; }
+        if (power == 1) return true;
+        if (power != 2 || out->degree > 1) return false;
+        Poly square;
+        multiply(out, out, &square);
+        *out = square;
+        return finite_poly(out);
+    }
+    Poly right;
+    if (!trig_polynomial(v.right, angle, &right)) return false;
+    if (v.kind == Div) {
+        if (right.degree || right.c[0] == 0) return false;
+        for (int i = 0; i <= out->degree; i++) out->c[i] /= right.c[0];
+    } else if (v.kind == Mul) {
+        Poly product;
+        if (out->degree + right.degree > 2 || !multiply(out, &right, &product)) return false;
+        *out = product;
+    } else {
+        if (right.degree > out->degree) out->degree = right.degree;
+        for (int i = 0; i <= right.degree; i++) out->c[i] += v.kind == Add ? right.c[i] : -right.c[i];
+        trim(out);
+    }
+    return finite_poly(out);
+}
+
+typedef struct { double constant, sine, cosine; } TrigSum;
+
+static bool mixed_trig(Expr e, TrigAngle *angle, TrigSum *out) {
+    if (!e) return false;
+    Node v = nodes[e];
+    if (constant(e)) {
+        out->constant = evaluate(e,0);
+        return isfinite(out->constant);
+    }
+    if (v.kind == Sin || v.kind == Cos) {
+        Poly p;
+        if (!polynomial(v.left,&p) || p.degree != 1 || !finite_poly(&p)) return false;
+        if (angle->found && (angle->scale != p.c[1] || angle->shift != p.c[0])) return false;
+        *angle = (TrigAngle){Sin,p.c[1],p.c[0],true};
+        if (v.kind == Sin) out->sine = 1;
+        else out->cosine = 1;
+        return true;
+    }
+    if (v.kind < Add || v.kind > Div) return false;
+    TrigSum a = {0}, b = {0};
+    if (!mixed_trig(v.left,angle,&a) || !mixed_trig(v.right,angle,&b)) return false;
+    if (v.kind == Add || v.kind == Sub) {
+        double sign = v.kind == Add ? 1 : -1;
+        *out = (TrigSum){a.constant+sign*b.constant,a.sine+sign*b.sine,a.cosine+sign*b.cosine};
+    } else {
+        if (v.kind == Mul && (b.sine || b.cosine)) { TrigSum swap=a; a=b; b=swap; }
+        if (b.sine || b.cosine || (v.kind == Div && !b.constant)) return false;
+        double factor = v.kind == Div ? 1/b.constant : b.constant;
+        *out = (TrigSum){a.constant*factor,a.sine*factor,a.cosine*factor};
+    }
+    return isfinite(out->constant) && isfinite(out->sine) && isfinite(out->cosine);
+}
+
+static bool trig_family(double base, double period, TrigAngle angle, double low, double high,
+                        double roots[64], int *count) {
+    double start = angle.scale*low + angle.shift, end = angle.scale*high + angle.shift;
+    double left = fmin(start, end), right = fmax(start, end);
+    if (!isfinite(left) || !isfinite(right)) return false;
+    double first = ceil((left - base)/period - 1e-12);
+    double last = floor((right - base)/period + 1e-12);
+    if (last < first) return true;
+    if (last-first >= 64 || fabs(first) > 1e13 || fabs(last) > 1e13) return false;
+    for (double n = first; n <= last; n++) {
+        double x = (fma(period, n, base) - angle.shift)/angle.scale;
+        double tol = 1e-12*fmax(1, fmax(fabs(low), fabs(high)));
+        if (x < low-tol || x > high+tol) continue;
+        if (fabs(x-low) <= tol) x = low;
+        if (fabs(x-high) <= tol) x = high;
+        int j = 0;
+        while (j < *count && roots[j] < x-tol) j++;
+        if (j < *count && fabs(roots[j]-x) <= tol) continue;
+        if (*count == 64) return false;
+        for (int i = (*count)++; i > j; i--) roots[i] = roots[i-1];
+        roots[j] = x;
+    }
+    return true;
+}
+
+void cas_trig_equation(const char *input, const char *lower, const char *upper,
+                       bool degrees, Solution *solution) {
+    *solution = (Solution){0};
+    double low, high;
+    if (!cas_read_number(lower, &low) || !cas_read_number(upper, &high) || low > high) {
+        strcpy(solution->answer, "Enter finite bounds with lower <= upper.");
+        return;
+    }
+    used = 0;
+    too_complex = false;
+    radians = !degrees;
+    Expr e = parse(input, true);
+    TrigAngle angle = {0};
+    Poly p;
+    char reduction[92] = "";
+    if (!e || !trig_polynomial(e, &angle, &p) || !angle.found) {
+        angle = (TrigAngle){0};
+        TrigSum sum = {0};
+        if (!e || !mixed_trig(e,&angle,&sum) || !angle.found) {
+            strcpy(solution->answer, "Use linear angles in sin, cos or tan. Sine and cosine can share an angle.");
+            return;
+        }
+        double radius = hypot(sum.sine,sum.cosine);
+        double phase = atan2(sum.cosine,sum.sine)*(degrees ? 180/PI : 1);
+        angle.shift += phase;
+        if (!isfinite(radius) || !isfinite(angle.shift)) {
+            strcpy(solution->answer,"The coefficients are outside the supported range.");
+            return;
+        }
+        p = (Poly){.c={sum.constant,radius},.degree=radius != 0};
+        snprintf(reduction,sizeof(reduction),"Combine sine and cosine as %.8g sin(angle %+.8g).\n",radius,phase);
+    }
+    Writer out = {solution->answer, sizeof(solution->answer), 0};
+    Writer steps = {solution->steps, sizeof(solution->steps), 0};
+    append(&steps,reduction);
+    const char *name = angle.kind == Sin ? "sin" : angle.kind == Cos ? "cos" : "tan";
+    print(&steps, "Let t = %s(theta).\n", name);
+    append(&steps, "theta = ");
+    if (angle.scale == 1) append(&steps, "x");
+    else if (angle.scale == -1) append(&steps, "-x");
+    else print(&steps, "%.10gx", angle.scale);
+    if (angle.shift) print(&steps, " %+.10g", angle.shift);
+    append(&steps, ".\n");
+    append(&steps, "Solve in t: ");
+    poly_text_variable(&steps, &p,'t');
+    append(&steps, " = 0.\n");
+    solution->ok = true;
+    if (p.degree == 0) {
+        append(&out, p.c[0] != 0 ? "No solutions." : angle.kind == Tan ?
+               "All x in the interval where tan is defined." : "All x in the interval.");
+        return;
+    }
+    double targets[2];
+    int targets_count = 0;
+    if (p.degree == 1) targets[targets_count++] = -p.c[0]/p.c[1];
+    else {
+        double scale = fmax(fabs(p.c[0]), fmax(fabs(p.c[1]), fabs(p.c[2])));
+        double a = p.c[2]/scale, b = p.c[1]/scale, c = p.c[0]/scale;
+        double d = fma(b,b,-4*a*c);
+        if (d == 0) targets[targets_count++] = -b/(2*a);
+        else if (d > 0) {
+            double q = -0.5*(b+copysign(sqrt(d),b));
+            targets[targets_count++] = q/a;
+            targets[targets_count++] = c/q;
+        }
+    }
+    double roots[64], convert = degrees ? 180/PI : 1, turn = degrees ? 360 : 2*PI;
+    int count = 0;
+    for (int i = 0; i < targets_count; i++) {
+        double t = targets[i];
+        if (!isfinite(t) || (angle.kind != Tan && fabs(t) > 1+1e-13)) continue;
+        if (angle.kind != Tan) t = fmax(-1,fmin(1,t));
+        double base = (angle.kind == Sin ? asin(t) : angle.kind == Cos ? acos(t) : atan(t))*convert;
+        double periodic = angle.kind == Tan ? turn/2 : turn;
+        print(&steps, "%s(theta) = %.10g gives theta = %.10g\n", name,t,base);
+        double other = angle.kind == Sin ? turn/2-base : -base;
+        if (angle.kind != Tan) print(&steps, "or theta = %.10g by symmetry.\n", other);
+        print(&steps, "Add multiples of %.10g, then find x.\n", periodic);
+        if (!trig_family(base, periodic, angle, low, high, roots, &count) ||
+            (angle.kind != Tan && !trig_family(other, periodic, angle, low, high, roots, &count))) {
+            solution->ok = false;
+            strcpy(solution->answer, "Too many periods to display. Narrow the interval.");
+            return;
+        }
+    }
+    if (!count) append(&out, "No solutions in the interval.");
+    else {
+        append(&out, "x = ");
+        for (int i = 0; i < count; i++) {
+            char item[32];
+            snprintf(item, sizeof(item), "%s%.11g", i ? ", " : "", roots[i] == 0 ? 0 : roots[i]);
+            if (out.length + strlen(item) + 6 >= out.capacity) {
+                solution->ok = false;
+                strcpy(solution->answer, "Too many answers to display. Narrow the interval.");
+                return;
+            }
+            append(&out,item);
+        }
+        append(&out, degrees ? " deg" : " rad");
+    }
 }

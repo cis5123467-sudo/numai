@@ -7,8 +7,11 @@ from struct import pack, unpack
 import sys
 
 from elftools.elf.elffile import ELFFile
-from PIL import Image, ImageDraw, ImageFont
-from unicorn import Uc, UC_ARCH_ARM, UC_HOOK_CODE, UC_MODE_MCLASS, UC_MODE_THUMB
+from PIL import Image, ImageDraw
+from unicorn import (
+    Uc, UC_ARCH_ARM, UC_HOOK_CODE, UC_HOOK_INTR, UC_MODE_MCLASS, UC_MODE_THUMB,
+    UC_PROT_ALL, UC_PROT_NONE,
+)
 from unicorn.arm_const import (
     UC_ARM_REG_C1_C0_2, UC_ARM_REG_LR, UC_ARM_REG_PC, UC_ARM_REG_SP, UC_CPU_ARM_CORTEX_M7,
     UC_ARM_REG_R0, UC_ARM_REG_R1, UC_ARM_REG_R2, UC_ARM_REG_R3,
@@ -47,22 +50,31 @@ class Simulator:
         self.keyboard = deque()
         self.screen = Image.new("RGB", (320, 240), "white")
         self.draw = ImageDraw.Draw(self.screen)
-        self.font = ImageFont.load_default(size=11)
         self.strings = []
         self.waiting = False
         self.exited = False
-        for name, handler in (
-            ("eadk_keyboard_scan", self.scan), ("eadk_timing_msleep", self.sleep),
-            ("eadk_display_push_rect_uniform", self.rect), ("eadk_display_draw_string", self.text),
-        ):
-            address = self.symbol[name] & ~1
-            self.cpu.hook_add(UC_HOOK_CODE, self.stub, handler, begin=address, end=address)
+        if "draw_text" in self.symbol:
+            address = self.symbol["draw_text"] & ~1
+            self.cpu.hook_add(UC_HOOK_CODE, self.capture_text, begin=address, end=address)
+        self.cpu.hook_add(UC_HOOK_INTR, self.syscall)
         self.cpu.hook_add(UC_HOOK_CODE, self.exit, begin=STOP, end=STOP)
 
-    def stub(self, cpu, address, size, handler):
+    def syscall(self, cpu, interrupt, _):
+        assert interrupt == 2, f"Unexpected ARM exception {interrupt}"
+        pc = cpu.reg_read(UC_ARM_REG_PC)
+        number, opcode = cpu.mem_read(pc - 2, 2)
+        assert opcode == 0xDF, hex(pc)
         a, b, c, d = (cpu.reg_read(reg) for reg in REGS)
-        handler(a, b, c, d)
-        cpu.reg_write(UC_ARM_REG_PC, cpu.reg_read(UC_ARM_REG_LR))
+        if number == 19:  # eadk_display_push_rect
+            self.blit(a, b, c)
+        elif number == 20:  # eadk_display_push_rect_uniform
+            self.rect(a, b, c, d)
+        elif number == 34:  # eadk_keyboard_scan
+            self.scan()
+        elif number == 49:  # eadk_timing_msleep
+            self.sleep()
+        else:
+            raise AssertionError(f"Unexpected EADK syscall {number}")
 
     def sleep(self, *_):
         if not self.keyboard:
@@ -96,17 +108,19 @@ class Simulator:
             raise AssertionError("No string terminator")
         return text.decode()
 
-    def text(self, address, point, large, ink):
+    def capture_text(self, cpu, *_):
+        x, y, address = (cpu.reg_read(reg) for reg in REGS[:3])
         text = self.c_string(address)
-        x, y = point & 65535, point >> 16
-        paper, = unpack("<I", self.cpu.mem_read(self.cpu.reg_read(UC_ARM_REG_SP), 4))
-        size = 10 if large else 7
-        assert x + len(text)*size <= 320 and y + 14 <= 240, (x, y, text)
-        self.strings.append(text)
-        for i, char in enumerate(text):
-            left = x + size*i
-            self.draw.rectangle((left, y, left + size - 1, y + 13), fill=self.colour(paper))
-            self.draw.text((left, y + 1), char, font=self.font, fill=self.colour(ink))
+        assert x + len(text) * 7 <= 320 and y + 14 <= 240, (x, y, text)
+        if text:
+            self.strings.append(text)
+
+    def blit(self, a, b, address):
+        x, y, w, h = a & 65535, a >> 16, b & 65535, b >> 16
+        assert x + w <= 320 and y + h <= 240 and w and h, (x, y, w, h)
+        raw = self.cpu.mem_read(address, w * h * 2)
+        tile = Image.frombytes("RGB", (w, h), bytes(raw), "raw", "BGR;16")
+        self.screen.paste(tile, (x, y))
 
     def exit(self, cpu, *_):
         self.exited = True
@@ -115,7 +129,8 @@ class Simulator:
     def run(self, address=None):
         self.waiting = False
         pc = self.cpu.reg_read(UC_ARM_REG_PC) | 1 if address is None else address
-        self.cpu.emu_start(pc, 0, count=18_000_000)
+        # A batch of key presses can redraw the screen once per key.
+        self.cpu.emu_start(pc, 0, count=18_000_000 + len(self.keyboard) * 500_000)
         assert self.waiting or self.exited, hex(self.cpu.reg_read(UC_ARM_REG_PC))
 
     def press(self, *keys):
@@ -128,23 +143,43 @@ class Simulator:
     def see(self, *phrases):
         screen = "\n".join(self.strings)
         for phrase in phrases:
-            assert phrase in screen, f"{phrase!r} missing from screen:\n{screen}"
+            assert phrase.casefold() in screen.casefold(), f"{phrase!r} missing from screen:\n{screen}"
 
 
 def check_ui(path, screenshots):
     app = Simulator(path)
+    # Stress the launcher and shortcuts with a 4 KiB stack budget.
+    guard_base, guard_length = STACK - 0x4000, 0x3000
+    app.cpu.mem_protect(guard_base, guard_length, UC_PROT_NONE)
     app.run(app.entry)
-    app.see("NumAI", "UK DEG", "TOOLBOX", "VAR")
+    app.see("NUMAI", "deg", "TOOLBOX", "VAR")
+    assert app.screen.getpixel((0, 0)) == app.colour(0xfda6)
+    assert app.screen.getpixel((319, 0)) == app.colour(0xfda6)
+    assert not any("UK" in line for line in app.strings)
     app.screen.save(screenshots / "startup.png")
     app.press(("ALPHA", "XNT"))
-    app.see("NumAI", "UK DEG")
+    app.see("NUMAI", "deg")
     app.press(("SHIFT", "EXE"))
     app.see("Settings", "Degrees")
+    app.press("DOWN", "DOWN", "DOWN", "OK")
+    app.see("Keyboard shortcuts", "Key bind", "Function", "TOOLBOX", "Browse courses and topics")
+    app.screen.save(screenshots / "keyboard-shortcuts.png")
+    app.cpu.mem_protect(guard_base, guard_length, UC_PROT_ALL)
+    app.press(*["DOWN"] * 28)
+    app.see(">**", "Complete the square")
+    assert "Browse courses and topics" not in app.strings
+    app.press("BACK")
+    app.see("Settings", "Keyboard shortcuts")
+    app.press("EXE")
+    app.see("TOOLBOX", "Browse courses and topics")
+    app.press(("SHIFT", "EXE"))
+    app.see("deg")
+    app.press(("SHIFT", "EXE"))
     app.press("BACK", "SIN", "3", "0", ")", "EXE")
-    app.see("sin(30)", "1/2")
+    app.see("sin", "30", "0.5")
     app.press("BACK")
     app.press(("SHIFT", "EXE"), "OK", "BACK")
-    app.see("NumAI", "UK RAD")
+    app.see("NUMAI", "rad")
     app.press("TOOLBOX")
     app.see("Edexcel IGCSE Maths A", "OCR Level 3 Additional Maths", "Edexcel A Level Maths",
             "AQA Physics", "AQA Biology", "AQA Chemistry")
@@ -166,7 +201,7 @@ def check_ui(path, screenshots):
     app.see("9MA0", "Mechanics: Moments", "Stats: Hypothesis testing")
     app.press("OK", "OK", "DOWN", "DOWN", "OK", "EXE")
     app.see("Moment", "21")
-    app.press("VAR", "DOWN", "OK", "EXE")
+    app.press("VAR", *["DOWN"] * 4, "OK", "EXE")
     app.see("Factorise", "(x - 2)(x - 3)")
     app.screen.save(screenshots / "worked-solution.png")
     app.press("BACK", "BACK", "DOWN", "OK", "EXE")
@@ -187,7 +222,7 @@ def check_ui(path, screenshots):
     app.see("Root in an interval", "x approx. 0.7390851332")
     app.press("BACK", "BACK", "DOWN", "OK", "EXE")
     app.see("Complete the square", "2*(x + 3)^2 - 7")
-    app.press("BACK", "BACK", "DOWN", "DOWN", "OK", "DOWN", "DOWN", "OK")
+    app.press("BACK", "BACK", "DOWN", "OK", "DOWN", "DOWN", "OK")
     app.see("Substitute x", "Substitute x = 2")
     app.press(("SHIFT", "EXE"))
     app.see("Settings", "Radians", "Fractions", "Worked steps")
@@ -197,7 +232,7 @@ def check_ui(path, screenshots):
     app.press("SHIFT", "EXE")
     app.see("Settings", "Degrees", "Decimal", "Off")
     app.press("BACK", "BACK", "BACK", "BACK")
-    app.see("NumAI")
+    app.see("NUMAI")
     app.press("XNT", "SQUARE", "-", "2", "SHIFT", "PI", "0", "EXE")
     app.see("x^2-2=0", "1.414213562")
     app.press("HOME")
@@ -222,7 +257,7 @@ def check_keyboard(path, screenshots):
     app.see("Complete the square", "2*(x + 3)^2 - 7")
     app.screen.save(screenshots / "completed-square.png")
     app.press("BACK", ("SHIFT", "SIN"), "0", ".", "5", ")", "EXE")
-    app.see("asin(0.5)", "30")
+    app.see("asin", "0.5", "30")
     app.press("BACK", "1", "2", "3", ("SHIFT", "LEFT"), ("SHIFT", "LEFT"))
     draft = app.symbol["prompt"]
     app.see("23")
@@ -242,12 +277,12 @@ def check_keyboard(path, screenshots):
     app.press(("SHIFT", "DEL"), "1", "2", ("SHIFT", "^"), "SHIFT", "ALPHA", "EXP", "EXE")
     app.see("12->A", "Store the result in A")
     app.press("BACK", "SHIFT", "ALPHA", "EXP", "+", "1", "EXE")
-    app.see("A+1", "13")
+    app.see("A", "+", "13")
     app.press("BACK", "2", "5", "ALPHA", "DEL", "EXE")
-    app.see("25%", "1/4")
+    app.see("25%", "0.25")
     app.press("BACK", "1", ("SHIFT", "SQRT"), "2", "EXE")
     app.see("1<2", "True")
-    app.press("BACK", "BACK")
+    app.press("BACK", "HOME")
     assert app.exited
     print("CAS prefixes and NumWorks keypad mappings passed on ARM")
 
@@ -409,7 +444,18 @@ def check_physics(path):
         (0.4, 0.4, 5, 0.2), (120, 240, 300, 600), (12, 2, 48, 0.5),
     ]
     assert len(groups) == count == 35
-    work, result, stack = 0x20035000, 0x20035500, STACK - 0x1000
+    work, result, reference = 0x20035000, 0x20035500, 0x20036000
+    substitution, conversions, steps = result + 112, result + 332, result + 732
+    stack = STACK - 0x1000
+
+    def call(function, *arguments):
+        for reg, value in zip(REGS, arguments):
+            app.cpu.reg_write(reg, value)
+        app.cpu.mem_write(stack, pack(f"<{len(arguments[4:])}I", *arguments[4:]))
+        app.cpu.reg_write(UC_ARM_REG_SP, stack)
+        app.cpu.reg_write(UC_ARM_REG_LR, STOP | 1)
+        app.exited = False
+        app.run(app.symbol[function] | 1)
 
     def solve(eq, subject, data):
         addresses = []
@@ -417,63 +463,406 @@ def check_physics(path):
             address = work + 0x20 + 32*i
             app.cpu.mem_write(address, str(value).encode() + b"\0")
             addresses.append(0 if i == subject else address)
-        app.cpu.mem_write(work, pack("<4I", *addresses, *[0]*(4-len(addresses))))
-        for reg, value in zip(REGS, (eq, subject, work, result)):
-            app.cpu.reg_write(reg, value)
-        app.cpu.mem_write(stack, pack("<I", 112))
-        app.cpu.reg_write(UC_ARM_REG_SP, stack)
-        app.cpu.reg_write(UC_ARM_REG_LR, STOP | 1)
-        app.exited = False
-        app.run(app.symbol["physics_solve"] | 1)
-        return bool(app.cpu.reg_read(UC_ARM_REG_R0)), app.c_string(result)
+        app.cpu.mem_write(work, pack("<6I", *addresses, *[0]*(6-len(addresses))))
+        call("physics_solve", eq, subject, work, result)
+        return bool(app.cpu.reg_read(UC_ARM_REG_R0)), app.c_string(result), app.c_string(substitution, 220)
 
+    equation_size, variable_size = 156, 20
     tiers = []
+    sections = []
     for i, data in enumerate(groups):
-        eq = sheet + 112*i
-        title, _, _, _, _, _, higher, terms = unpack("<8I", app.cpu.mem_read(eq, 32))
+        eq = sheet + equation_size*i
+        title, _, section, _, _, _, higher, terms = unpack("<8I", app.cpu.mem_read(eq, 32))
+        sections.append(app.c_string(section))
         assert terms == len(data)
         if higher:
             tiers.append(i + 1)
+        call("physics_word_equation", eq, reference)
+        words = app.c_string(reference, 432)
+        app.cpu.mem_write(work, pack("<I", 0))
+        call("wrap", reference, 41, 0, work)
+        assert unpack("<I", app.cpu.mem_read(work, 4))[0] <= 5, app.c_string(title)
+        call("physics_reference", eq, reference)
+        facts = app.c_string(reference, 4096)
+        assert words in facts and "*" not in facts and facts.endswith(".\n"), app.c_string(title)
+        assert facts.count("Use: Find ") == terms, app.c_string(title)
+        app.cpu.mem_write(work, pack("<I", 0))
+        call("wrap", reference, 43, 0, work)
+        assert unpack("<I", app.cpu.mem_read(work, 4))[0] < 80, app.c_string(title)
         for subject, expected in enumerate(data):
-            ok, answer = solve(eq, subject, data)
+            variable = eq + 32 + variable_size*subject
+            symbol_ptr, name_ptr, unit_ptr, _, _ = unpack("<5I", app.cpu.mem_read(variable, variable_size))
+            symbol, name, unit = (app.c_string(pointer) for pointer in (symbol_ptr, name_ptr, unit_ptr))
+            assert len(f"Find {name} [{unit}]") <= 43
+            assert len(f"{symbol}: {name} [{unit}]") <= 41
+            call("physics_subject_equation", eq, subject, result, 112)
+            symbolic = app.c_string(result)
+            assert symbolic.startswith(symbol + "=") and symbolic in facts and "*" not in symbolic
+            assert name + " [" + unit + "]" in words
+            assert name + " [" + unit + "] =" in facts.split("Rearrangements\n")[1]
+            assert re.search(re.escape(f"- {symbol}: {name} [{unit}]\n  ") + r"[^\n]+\n", facts)
+            ok, answer, substituted = solve(eq, subject, data)
             assert ok, (app.c_string(title), subject, answer)
             match = re.search(r" = (?:\+/- )?(-?[0-9.e+\-]+)", answer)
             assert match and math.isclose(float(match[1]), expected, rel_tol=2e-9, abs_tol=1e-9), (
                 app.c_string(title), expected, answer
             )
+            assert answer[match.end():] == (" (no unit)" if unit == "no unit" else " " + unit), answer
+            assert substituted.startswith(symbol + "=") and "*" not in substituted and "$" not in substituted
     assert tiers == [23, 28, 29, 33, 34, 35]
-    assert not solve(sheet + 7*112, 0, (0, 60, 45))[0]
-    assert not solve(sheet + 4*112, 0, (0, 10, 0))[0]
-    assert not solve(sheet + 25*112, 0, (0, 1, -2, 2))[0]
+    assert solve(sheet + 28*equation_size, 0, groups[28])[2] == "F=0.2 x (-15)/0.03"
+    heating = sheet + 3*equation_size
+    ok, _, substituted = solve(heating, 0, (0, 1.2345678901234567e100, 9.876543210987654e-200, -2.012345678901234e100))
+    assert ok and "1.2345678901234567e+100" in substituted
+    app.cpu.mem_write(reference, ("Substitute: " + substituted).encode() + b"\0")
+    app.cpu.mem_write(work, pack("<I", 0))
+    call("wrap", reference, 43, 0, work)
+    assert unpack("<I", app.cpu.mem_read(work, 4))[0] <= 3
+    assert not solve(sheet + 7*equation_size, 0, (0, 60, 45))[0]
+    assert not solve(sheet + 4*equation_size, 0, (0, 10, 0))[0]
+    assert not solve(sheet + 25*equation_size, 0, (0, 1, -2, 2))[0]
     print(f"{count} physics references and {sum(map(len, groups))} rearrangements checked on ARM")
+
+    chemistry = app.symbol["chemistry_equations"]
+    chemistry_count, = unpack("<I", app.cpu.mem_read(app.symbol["chemistry_equation_count"], 4))
+    chemistry_examples = [
+        (12, 23, 11), (35.5, 35, 37, 75), (18.96, 24, 79), (32, 16, 2),
+        (74, 40, 32, 2, 0, 0), (3200/44, 32, 44), (25, 19, 6), (1, 22, 20),
+        (20, 5, .25), (75, 6, 8), (100, 80, 80), (.5, 9, 18), (1.505e23, .25),
+        (.6, .3, 2, 1), (1.5, .3, .2), (1.5, 3, 2, 2, 1), (5.6, 10, 100, 56, 1, 1),
+        (.1, .025, .25), (8, .2, 40), (.04, .1, .025, .02, 1, 2), (3, .125),
+        (10, 15, 2, 3), (.06, 1.8, 30), (2, 48, 24), (.002, .03, 15),
+        (1.5, 30, 20), (.4, 2.8, 7), (-350, 1300, 1650), (100, 5, 3),
+    ]
+    assert len(chemistry_examples) == chemistry_count
+    higher_only = set(range(11, 22)) | {24, 25, 27, 28}
+    for i, values in enumerate(chemistry_examples):
+        eq = chemistry + i*equation_size
+        title, _, _, _, _, _, higher, terms = unpack("<8I", app.cpu.mem_read(eq, 32))
+        title = app.c_string(title)
+        assert bool(higher) == (i in higher_only), title
+        assert terms == len(values), title
+        call("physics_reference", eq, reference)
+        facts = app.c_string(reference, 4096)
+        assert "*" not in facts and "Worked example\n" in facts and facts.endswith(".\n"), title
+        app.cpu.mem_write(work, pack("<I", 0))
+        call("wrap", reference, 43, 0, work)
+        assert unpack("<I", app.cpu.mem_read(work, 4))[0] < 160, title
+        for subject, expected in enumerate(values):
+            _, _, unit_ptr, formula, _ = unpack("<5I", app.cpu.mem_read(eq + 32 + variable_size*subject, variable_size))
+            if not formula:
+                continue
+            ok, answer, substituted = solve(eq, subject, values)
+            unit = app.c_string(unit_ptr)
+            match = re.search(r" = (-?[0-9.e+\-]+)", answer)
+            assert ok and match and math.isclose(float(match[1]), expected, rel_tol=2e-9, abs_tol=1e-9), (
+                title, subject, answer, expected
+            )
+            assert answer[match.end():] == (" (no unit)" if unit == "no unit" else " " + unit), answer
+            assert "$" not in substituted and "*" not in substituted
+
+    def chemistry_eq(index):
+        return chemistry + index*equation_size
+
+    ok, answer, _ = solve(chemistry_eq(19), 0, (0, "0.1 mol/L", "25cm3", "20 mL", 1, 2))
+    assert ok and answer == "cA = 0.04 mol/dm^3", answer
+    assert "25 cm^3 = 0.025 dm^3" in app.c_string(conversions, 400)
+    assert "Mole ratio B:A = 2:1" in app.c_string(steps, 300)
+    ok, answer, _ = solve(chemistry_eq(1), 0, (0, 35, 37, "75%"))
+    assert ok and answer == "Ar = 35.5 (no unit)"
+    ok, answer, _ = solve(chemistry_eq(4), 0, (0, 40, 32, 2, "", ""))
+    assert ok and answer == "Mr = 74 (no unit)"
+    ok, answer, _ = solve(chemistry_eq(15), 0, (0, 1e20, 1, 1, 1))
+    assert ok and answer == "x = 1 mol" and "B limits" in app.c_string(steps, 300)
+    print(f"{chemistry_count} Chemistry fact sheets and their solver subjects checked on ARM")
+
+    unit_examples = [
+        ("250 mA", "A", .25), ("12 cm2", "m^2", .0012), ("3.5kJ", "J", 3500),
+        ("3.5cl", "mL", 35), ("250cm^3", "dm^3", .25), ("(1/4)kg", "g", 250),
+        ("0 degC", "K", 273.15), ("273.15K", "degC", 0), ("10 dF", "C or K", 50/9),
+        ("36 km/h", "m/s", 10), ("1 atm", "Pa", 101325),
+        ("80%", "no unit", .8), ("80%", "%", 80),
+        ("15 kg", "V", None),
+    ]
+    for source, target, expected in unit_examples:
+        app.cpu.mem_write(work, source.encode() + b"\0")
+        app.cpu.mem_write(work + 0x80, target.encode() + b"\0")
+        call("quantity_read", work, work + 0x80, result, substitution, 220)
+        ok = bool(app.cpu.reg_read(UC_ARM_REG_R0))
+        assert ok == (expected is not None), (source, target)
+        if ok:
+            actual, = unpack("<d", app.cpu.mem_read(result, 8))
+            assert math.isclose(actual, expected, rel_tol=1e-10, abs_tol=1e-10), (source, target, actual)
+    print("Linear, square, cubic, percent and temperature conversions checked on ARM")
 
     app = Simulator(path)
     app.run(app.entry)
-    app.press("VAR", *["DOWN"] * 11, "OK")
-    app.see("Physics equation sheet", "Kinetic energy", "mass x speed", "squared")
+    app.press("VAR")
+    app.see("CAS and history", "AQA GCSE Physics equation sheet", "AQA GCSE Chemistry equation sheet", "Unit conversions")
+    assert app.screen.getpixel((0, 0)) == app.colour(0xfda6)
+    app.press("OK")
+    app.see("AQA GCSE Physics equation sheet", "Kinetic energy [J]", "Mass [kg]", "Speed [m/s] squared")
     app.screen.save(path.parent / "equation-sheet.png")
     app.press("OK")
-    app.see("Kinetic energy", "Ek = 0.5*m*v^2", "Symbols and units", "Solver")
-    app.press(*["DOWN"] * 9)
-    app.see("Rearrangements", "m = 2*Ek/v^2", "Worked example")
+    app.see("Kinetic energy", "Topic: Energy", "TOOLBOX: open topic 4.1.1.2",
+            "Ek=0.5mv^2", "Symbols and units", "joule", "kilogram", "Solver")
+    ink = app.colour(0x2104)
+    assert app.screen.getpixel((11, 135)) == ink
+    assert app.screen.getpixel((11 + 7*len("Symbols and units") - 1, 135)) == ink
+    app.screen.save(path.parent / "physics-symbols-units.png")
+    app.press("TOOLBOX")
+    app.see("Kinetic, elastic and GPE", "4.1.1.2")
+    app.press("BACK")
+    app.see("Topic: Energy", "Symbols and units", "Solver")
+    headings_seen = set()
+    for _ in range(36):
+        headings_seen.update(app.strings)
+        if "Use: Find Mass given Kinetic energy and" in app.strings:
+            break
+        app.press("DOWN")
+    assert {"Worked example", "When to use it", "Rearrangements"} <= headings_seen
+    app.see("m=2Ek/v^2", "Use: Find Mass given")
     app.screen.save(path.parent / "equation-reference.png")
     app.press("EXE")
     app.see("Choose the unknown", "Kinetic energy", "Mass", "Speed")
     app.press("DOWN", "DOWN", "OK")
-    app.see("Find Speed [m/s]", "Kinetic energy", "Mass")
+    app.see("Find Speed [m/s]", "v=sqrt(2Ek/m)", "Kinetic energy", "Mass")
+    assert app.screen.getpixel((7, 85)) == app.colour(0xfda6)
+    assert all(app.screen.getpixel((x, y)) == (255, 255, 255)
+               for y in range(86, 89) for x in range(7, 313))
+    app.press("EXE")
+    app.see("Check Kinetic energy [J].")
+    assert not any(line.startswith("Substitute:") for line in app.strings)
     app.press("9", "DOWN", "2", "EXE")
-    app.see("v = 3 m/s")
+    app.see("Substitute: v=sqrt(2 x 9/2)", "v = 3 m/s")
     app.screen.save(path.parent / "equation-solver.png")
     app.press("BACK", "UP", "OK")
-    app.see("Find Mass [kg]", "9")
+    app.see("Find Mass [kg]", "m=2Ek/v^2", "9")
     app.press("DOWN", "3", "EXE")
-    app.see("m = 2 kg")
+    app.see("Substitute: m=2 x 9/3^2", "m = 2 kg")
     app.press("BACK", "BACK", "BACK", *["DOWN"] * 22)
     app.see("Liquid pressure at depth", "(higher only)")
     app.press("OK")
-    app.see("(higher only)", "p = h*rho*g")
+    app.see("(higher only)", "p=hrhog")
+    app.press("TOOLBOX")
+    app.see("Pressure at depth", "(higher only)", "4.5.5.1.2")
+    app.press("BACK")
+    app.see("Liquid pressure at depth", "Solver")
+    app.press("BACK", *["UP"] * 22)
+    for i, section in enumerate(sections):
+        app.press("OK", "TOOLBOX")
+        app.see("UP/DOWN: scroll", section)
+        app.press("BACK", "BACK")
+        if i + 1 < len(sections):
+            app.press("DOWN")
+    print(f"Checked every physics fact sheet's TOOLBOX shortcut on ARM")
+    app.press(*["UP"] * 24, "OK", "EXE", "OK")
+    app.see("Find Power [W]", "P=VI")
+    app.press("1", "2", "DOWN", "2", "5", "0", "ALPHA", "-", "ALPHA", "7",
+              "SHIFT", "ALPHA", "EXP", "EXE")
+    app.see("Physics working", "250 mA = 0.25 A", "Substitute: P=12 x 0.25", "P = 3 W")
+    app.screen.save(path.parent / "physics-unit-conversion.png")
+    app.press(*["BACK"] * 4)
+    app.press("BACK", "DOWN", "OK")
+    app.see("AQA GCSE Chemistry equation sheet", "Neutron number", "Relative atomic mass")
+    app.press(*["DOWN"] * 19, "OK")
+    app.see("Titration with mole ratios", "(higher only)", "4.4.2.5")
+    app.press("TOOLBOX")
+    app.see("Titration calculations", "(higher only)")
+    app.press("BACK", "EXE", "OK")
+    app.see("Chemistry solver", "Find Concentration A [mol/dm^3]")
+    app.press("0", ".", "1", "DOWN", "2", "5", "ALPHA", "-", "ALPHA", "7", "ALPHA", "SQUARE",
+              "DOWN", "2", "0", "ALPHA", "-", "ALPHA", "7", "ALPHA", "SQUARE",
+              "DOWN", "1", "DOWN", "2", "EXE")
+    app.see("Chemistry working", "25 mL = 0.025 dm^3", "Mole ratio B:A = 2:1", "cA = 0.04 mol/dm^3")
+    app.screen.save(path.parent / "chemistry-titration.png")
+    app.press("BACK", "BACK", "BACK", "BACK", "BACK", "DOWN", "OK")
+    app.see("Unit conversions", "Length", "Area", "Volume")
+    app.press("DOWN", "DOWN", "OK", *["DOWN"] * 6, "OK", *["DOWN"] * 5, "OK")
+    app.see("cL to mL")
+    app.press("3", ".", "5", "EXE", ("SHIFT", "VAR"))
+    app.see("35 mL", "Number copied to NumAI clipboard")
+    app.screen.save(path.parent / "unit-converter.png")
+    app.press(*["BACK"] * 6, ("SHIFT", "TOOLBOX"))
+    app.see("NUMAI", "35")
     app.press("HOME")
     assert app.exited
+
+
+def check_chemistry_links(path):
+    app = Simulator(path)
+    app.run(app.entry)
+    app.press("VAR", "DOWN", "OK")
+    destinations = [
+        ("4.1.1.5", "Atomic size, mass and isotopes"),
+        ("4.1.1.6", "Relative atomic mass"),
+        ("4.1.1.6", "Relative atomic mass"),
+        ("4.3.1.2", "Relative formula mass"),
+        ("4.3.1.2", "Relative formula mass"),
+        ("4.3.1.2", "Relative formula mass"),
+        ("4.3.1.1", "Mass conservation and balancing"),
+        ("4.3.1.4", "Chemical measurement uncertainty"),
+        ("4.3.2.5", "Concentration in g/dm^3"),
+        ("4.3.3.1", "Percentage yield"),
+        ("4.3.3.2", "Atom economy"),
+        ("4.3.2.1", "Moles"),
+        ("4.3.2.1", "Moles"),
+        ("4.3.2.2", "Amounts in equations"),
+        ("4.3.2.3", "Balancing using moles"),
+        ("4.3.2.4", "Limiting reactants"),
+        ("4.3.3.1", "Theoretical product mass"),
+        ("4.3.4", "Concentration in mol/dm^3"),
+        ("4.3.4", "Concentration in mol/dm^3"),
+        ("4.4.2.5", "Titration calculations"),
+        ("4.3.5", "Molar gas volume"),
+        ("4.3.5", "Molar gas volume"),
+        ("4.6.1.1", "Reaction rates and graphs"),
+        ("4.6.1.1", "Reaction rates and graphs"),
+        ("4.6.1.1", "Instantaneous rate in mol/s"),
+        ("4.6.1.1", "Instantaneous rate in mol/s"),
+        ("4.8.1.3", "Chromatography and Rf"),
+        ("4.5.1.3", "Bond energy calculations"),
+        ("4.4.2.6", "Strong and weak acids"),
+    ]
+    count, = unpack("<I", app.cpu.mem_read(app.symbol["chemistry_equation_count"], 4))
+    assert len(destinations) == count
+    for i, (section, title) in enumerate(destinations):
+        app.press("OK")
+        app.see(f"TOOLBOX: open topic {section}", "Solver")
+        app.press("DOWN", "DOWN")
+        fact_sheet = app.strings.copy()
+        app.press("TOOLBOX")
+        app.see(section, title, "UP/DOWN: scroll")
+        app.press("BACK")
+        assert app.strings == fact_sheet
+        app.press("BACK")
+        if i + 1 < count:
+            app.press("DOWN")
+    app.press("HOME")
+    assert app.exited
+    print(f"Checked all {count} Chemistry fact-sheet shortcuts and BACK navigation on ARM")
+
+
+def check_new_calculation(path):
+    app = Simulator(path)
+    app.run(app.entry)
+    app.press("1", "/", "3", "EXE")
+    app.see("0.33333", "\x1f")
+    app.press("UP", "LEFT", "OK")
+    assert app.c_string(app.symbol["prompt"]) == "1/3"
+    app.press("BACK", "UP", "RIGHT", "OK")
+    app.see("ADDITIONAL RESULTS", "Scientific notation", "Mixed fraction", "Euclidean division")
+    app.screen.save(path.parent / "calc-fraction-menu.png")
+    app.press("OK")
+    assert app.c_string(app.symbol["prompt"]) == "3.33333*10^(-1)"
+    app.press("BACK", "SQRT", "8", ")", "EXE")
+    app.see("2.82843", "\x1f")
+    app.press("UP", "LEFT", "OK")
+    assert app.c_string(app.symbol["prompt"]) == "2*sqrt(2)"
+    app.press("BACK", "UP", "RIGHT", "OK")
+    app.see("ADDITIONAL RESULTS", "(8, 2.828)", "Curve equation")
+    app.screen.save(path.parent / "calc-root-graph.png")
+    app.press("BACK", "DOWN", "8", "4", "EXE", "UP", "RIGHT", "OK")
+    app.see("0x54", "0b1010100")
+    app.press(*["DOWN"] * 4)
+    app.see("Prime factors")
+    app.press("OK")
+    assert app.c_string(app.symbol["prompt"]) == "2^2*3*7"
+    app.press("BACK", ("SHIFT", "EXE"), *["DOWN"] * 5, "OK", *["DOWN"] * 5, "OK")
+    app.see("Decimal places", "10")
+    app.press("BACK", "1", "/", "3", "EXE")
+    app.see("0.3333333333")
+    app.press(("SHIFT", "EXE"), "OK", "BACK", "SIN", "PI", "/", "6", ")", "EXE")
+    app.see("rad", "0.5", "=")
+    app.press("UP", "RIGHT", "OK")
+    app.see("ADDITIONAL RESULTS", "Unit circle")
+    app.screen.save(path.parent / "calc-trig-extras.png")
+    app.press("DOWN", "DOWN", "DOWN", "DOWN")
+    app.see("tan")
+    app.press("OK")
+    assert app.c_string(app.symbol["prompt"]) == "(sqrt(3))/3"
+    app.press("HOME")
+    assert app.exited
+    print("Structured calculation history, decimal setting and contextual results checked on ARM")
+
+
+def check_new_tools(path):
+    app = Simulator(path)
+    app.run(app.entry)
+    app.press("VAR")
+    assert "CAS AND HISTORY" in app.strings
+    assert app.screen.getpixel((319, 1)) == app.colour(0xfda6)
+    app.press(*["DOWN"] * 15, "OK", "EXE")
+    app.see("Trigonometric equation solver", "theta = 30", "150 by symmetry", "x = 30, 150 deg")
+    app.press("BACK", "BACK", "DOWN", "OK", "7", "DOWN", "1", "0", "DOWN", "DOWN", "3", "0", "EXE")
+    app.see("Triangle 1", "Triangle 2", "supplement")
+    app.press("BACK", "BACK", "DOWN", "OK", "EXE")
+    app.see("Physics formula rearranger", "Subtract", "a = (v^2 - u^2)/(2*s)")
+    app.press("BACK", "BACK", "BACK", "TOOLBOX")
+    assert "TOOLBOX" in app.strings
+    app.press("OK", "OK", ("SHIFT","VAR"))
+    app.see("Pinned in TOOLBOX")
+    app.press("BACK", "BACK", "BACK", "VAR", "OK", "OK", ("SHIFT","VAR"))
+    app.see("Pinned in TOOLBOX")
+    app.press("BACK", "BACK", "DOWN", "OK", "OK", ("SHIFT","VAR"))
+    app.see("Pinned in TOOLBOX")
+    app.press("BACK", "BACK", "BACK", "TOOLBOX", *["DOWN"] * 6, "OK")
+    app.see("FAVOURITES", "Integers, primes and HCF", "Kinetic energy", "Neutron number")
+    app.press("DOWN", "OK")
+    app.see("Topic: Energy", "TOOLBOX: open topic 4.1.1.2", "Solver")
+    app.press("BACK", ("SHIFT","VAR"))
+    app.see("Removed from Favourites", "Neutron number")
+    assert "Kinetic energy" not in app.strings
+    app.press("OK", "BACK")
+    app.see("FAVOURITES", "Neutron number")
+    app.press("HOME")
+    assert app.exited
+
+    app = Simulator(path)
+    app.run(app.entry)
+    scratch, result, stack = 0x20035000, 0x20036500, STACK - 0x1000
+
+    def invoke(function, args):
+        for reg, value in zip(REGS,args):
+            app.cpu.reg_write(reg,value)
+        app.cpu.mem_write(stack,pack(f"<{len(args[4:])}I",*args[4:]))
+        app.cpu.reg_write(UC_ARM_REG_SP,stack)
+        app.cpu.reg_write(UC_ARM_REG_LR,STOP | 1)
+        app.exited = False
+        app.run(app.symbol[function] | 1)
+
+    def write_text(address, value):
+        app.cpu.mem_write(address,value.encode()+b"\0")
+        return address
+
+    for expression, lo, hi, deg, expected in [
+        ("cos(2x)=0", "0", "360", 1, "45, 135, 225, 315"),
+        ("sin(x)^2=1/4", "0", "360", 1, "30, 150, 210, 330"),
+        ("tan(-x)=1", "-pi", "pi", 0, "-0.7853981634, 2.35619449"),
+        ("sin(x)=2", "-100", "100", 1, "No solutions"),
+        ("cos(x)=1", "0", "360", 1, "0, 360"),
+        ("sin(x)=cos(x)", "0", "360", 1, "45, 225"),
+    ]:
+        invoke("cas_trig_equation",[write_text(scratch,expression),write_text(scratch+128,lo),
+                                    write_text(scratch+256,hi),deg,result])
+        assert expected in app.c_string(result+512,512), (expression,app.c_string(result+512,512))
+    for expression,subject,expected in [
+        ("v^2=u^2+2as","a","a = (v^2 - u^2)/(2*s)"),
+        ("F=kx+cx","x","x = F/(k + c)"),
+        ("W=mg","m","m = W/g"),
+        ("E=mv^2/2","v","v = +/-sqrt(2*E/m)"),
+    ]:
+        invoke("rearrange_physics",[write_text(scratch,expression),write_text(scratch+128,subject),result])
+        assert expected in app.c_string(result+512,512), (expression,app.c_string(result+512,512))
+    for expression,expected,n,d,r in [
+        ("1/3","1/3",1,3,1),("sqrt(8)","2*sqrt(2)",2,1,2),("sqrt(1/8)","(sqrt(2))/4",1,4,2),
+        ("sqrt(3)/sqrt(6)","(sqrt(2))/2",1,2,2),("sin(pi/6)","1/2",1,2,1),
+        ("0b1010100","84",84,1,1),("0x54","84",84,1,1),
+    ]:
+        invoke("cas_calculation",[write_text(scratch,expression),0,result])
+        assert app.c_string(result+43)==expected, (expression,app.c_string(result+43))
+        assert unpack("<3i",app.cpu.mem_read(result+16,12))==(n,d,r)
+    print("Trig branches, two-triangle SSA, physics isolation and favourites checked on ARM")
 
 
 if __name__ == "__main__":
@@ -482,5 +871,8 @@ if __name__ == "__main__":
     check_ui(target, output)
     check_keyboard(target, output)
     check_engine(target)
+    check_new_calculation(target)
+    check_new_tools(target)
     check_physics(target)
+    check_chemistry_links(target)
     check_catalog(target)
