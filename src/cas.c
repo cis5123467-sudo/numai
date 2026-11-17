@@ -15,7 +15,7 @@
 
 typedef enum {
     Number, Variable, Add, Sub, Mul, Div, Pow, Sin, Cos, Tan, Exp, Ln, Log,
-    Sqrt, Abs, Asin, Acos, Atan, Choose, Permute, Binomial, Normal, Floor, Gcd, Min
+    Sqrt, Abs, Asin, Acos, Atan, Choose, Permute, Binomial, Normal, Floor, Gcd, Min, Factorial
 } Kind;
 
 typedef struct {
@@ -39,8 +39,10 @@ static Node nodes[NODE_LIMIT];
 static const char *number_tokens[NODE_LIMIT];
 static Expr used;
 static bool too_complex, radians;
-static double stored_values[52];
-static bool stored[52];
+static CasVariables stored_variables;
+
+void cas_get_variables(CasVariables *variables) { *variables = stored_variables; }
+void cas_set_variables(const CasVariables *variables) { stored_variables = *variables; }
 
 static int variable_index(char ch) {
     if (ch >= 'a' && ch <= 'z') return ch - 'a';
@@ -77,6 +79,12 @@ static double numeric(Kind kind, double a, double b, double c) {
         case Mul: return a * b;
         case Div: return a / b;
         case Pow: return pow(a, b);
+        case Factorial: {
+            if (!isfinite(a) || a < 0 || a > 170 || a != floor(a)) return NAN;
+            double product = 1;
+            for (int i = 2; i <= (int)a; i++) product *= i;
+            return product;
+        }
         case Sin: return sin(a * angle);
         case Cos: return cos(a * angle);
         case Tan: {
@@ -210,9 +218,9 @@ static Expr atom(Parser *p) {
         return make(functions[i].kind, first, second, 0);
     }
     int index = variable_index(*start);
-    if (index >= 0 && stored[index]) {
+    if (index >= 0 && stored_variables.set[index]) {
         p->input++;
-        Expr e = number(stored_values[index]);
+        Expr e = number(stored_variables.value[index]);
         if (e) nodes[e].literal_kind=2;
         return e;
     }
@@ -224,7 +232,11 @@ static Expr unary(Parser *p) {
     if (take(p, '+')) return unary(p);
     if (take(p, '-')) return make(Sub, number(0), unary(p), 0);
     Expr base = atom(p);
-    while (!p->invalid && take(p, '%')) base = make(Div, base, number(100), 0);
+    while (!p->invalid) {
+        if (take(p, '!')) base = make(Factorial, base, 0, 0);
+        else if (take(p, '%')) base = make(Div, base, number(100), 0);
+        else break;
+    }
     if (take(p, '^')) return make(Pow, base, unary(p), 0);
     return base;
 }
@@ -259,7 +271,7 @@ static Expr parse(const char *text, bool equation) {
     for (const char *c = text; *c; c++) {
         if (*c == '(' && ++depth > 18) return NO_NODE;
         if (*c == ')') depth--;
-        if (strchr("+-*/^(", *c) && ++operators > 50) return NO_NODE;
+        if (strchr("+-*/^(!", *c) && ++operators > 50) return NO_NODE;
     }
     Parser p = {text, false};
     Expr result = expression(&p);
@@ -429,7 +441,10 @@ static void expr_text(Writer *out, Expr e, int level) {
     if (prec < level) append(out, "(");
     if (n.kind == Number) value_text(out, n.value, false);
     else if (n.kind == Variable) append(out, "x");
-    else if (n.kind <= Pow) {
+    else if (n.kind == Factorial) {
+        expr_text(out, n.left, prec);
+        append(out, "!");
+    } else if (n.kind <= Pow) {
         static const char *const operators[] = {" + ", " - ", "*", "/", "^"};
         if (n.kind == Sub && is_number(n.left, 0)) append(out, "-");
         else {
@@ -929,8 +944,8 @@ static bool calculated_special(const char *input, bool decimal, Solution *soluti
         Expr expression = parse(expression_text, false);
         double value = constant(expression) ? evaluate(expression, 0) : NAN;
         if (!isfinite(value)) goto invalid_store;
-        stored[index] = true;
-        stored_values[index] = value;
+        stored_variables.set[index] = true;
+        stored_variables.value[index] = value;
         print(&steps, "Store the result in %c for this session.\n", *name);
         numeric_answer(&out, value, decimal);
         solution->ok = true;
@@ -1245,7 +1260,7 @@ static Exact exact_expression(Expr e) {
     if (v.kind == Abs) return (Exact){abs(a.n), a.d, a.rad};
     if (v.kind < Add || v.kind > Pow) {
         double value = evaluate(e, 0);
-        if ((v.kind == Floor || v.kind == Gcd || v.kind == Choose || v.kind == Permute) &&
+        if ((v.kind == Floor || v.kind == Gcd || v.kind == Choose || v.kind == Permute || v.kind == Factorial) &&
             isfinite(value) && fabs(value) <= ExactLimit && value == trunc(value))
             return (Exact){(int)value, 1, 1};
         return (Exact){0};

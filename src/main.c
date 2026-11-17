@@ -4,6 +4,7 @@
 #include "units.h"
 #include "solvers.h"
 #include "mathview.h"
+#include "scriptstore.h"
 
 #include <ctype.h>
 #include <math.h>
@@ -26,22 +27,41 @@ static const char physics_sheet_title[] = "AQA GCSE Physics equation sheet";
 static const char chemistry_sheet_title[] = "AQA GCSE Chemistry equation sheet";
 
 enum { CHAR_WIDTH = 7, CHAR_HEIGHT = 14, TEXT_WIDTH = 43, FOOTER = 226,
-       HISTORY_LIMIT = 5, WRAP_LIMIT = 160, CAS_TOOL_COUNT = 3, FAVOURITE_LIMIT = 48,
+       HISTORY_LIMIT = 5, WRAP_LIMIT = 240, FAVOURITE_LIMIT = 48, SESSION_LIMIT = 4, SESSION_NAME_SIZE = 24,
        CALCULATION_LIMIT = 12, EXTRA_LIMIT = 8 };
 
 typedef enum { Prompt, Toolbox, Chapters, Topics, TopicMenu, Examples, Form, Reading,
                Result, CasMenu, History, Settings, Shortcuts, PhysicsList, PhysicsDetail,
                PhysicsSubjects, PhysicsForm, ScienceResult,
                UnitGroups, UnitFrom, UnitTo, UnitValue, UnitResult, Favourites,
-               ToolForm, ToolOutput, DecimalPlaces, CalcHistory, CalcExtras } Page;
+               ToolForm, ToolOutput, DecimalPlaces, CalcHistory, CalcExtras,
+               GeneralMenu, EquationFavourites, SessionName, SessionList, About, HistoryResult, Search, RelatedEquations } Page;
+typedef enum { CoursePins, PhysicsPins, ChemistryPins } FavouriteGroup;
+typedef enum { MenuCourses, MenuEquations, MenuNewSession, MenuOpenSession,
+               MenuHistory, MenuShortcuts, MenuPreferences, MenuAbout, GeneralCount } GeneralItem;
+enum { CasFavourites, CasPhysics, CasChemistry, CasUnits, CasRearrange, CasOperationStart,
+       CasTrig = CasOperationStart + OperationCount - 1, CasTriangle, CasSearch, CasCount };
+static const char *const general_items[GeneralCount] = {
+    "Courses", "Equations and CAS", "New Session", "Open Session",
+    "History", "Keyboard Shortcuts", "Preferences", "About"
+};
 typedef struct { int row, first; } Selection;
 typedef struct {
     char text[EXPRESSION_SIZE];
     int cursor, anchor;
 } Field;
+typedef enum { ReuseNone, ReuseCas, ReuseTopic, ReuseScience, ReuseExtra, ReuseUnit } ReuseKind;
 typedef struct {
+    ReuseKind kind;
+    int id, subject, course, chapter, topic, count;
+    bool degrees;
+    char inputs[SCIENCE_VARIABLES][EXPRESSION_SIZE];
+} ReuseData;
+typedef struct {
+    ReuseData reuse;
     char question[EXPRESSION_SIZE];
     Operation operation;
+    char title[TEXT_WIDTH + 1];
     Solution solution;
 } HistoryEntry;
 typedef struct {
@@ -56,20 +76,35 @@ typedef struct { const char *label; char text[EXPRESSION_SIZE], reuse[EXPRESSION
 static const char *const extra_tool_names[] = {"Trigonometric equation solver", "Triangle solver",
                                                 "Physics formula rearranger"};
 
-static Page page, form_parent, result_parent, settings_parent, reading_parent;
+static Page page, form_parent, result_parent, reading_parent;
+static Page general_parent, toolbox_parent, cas_parent, favourite_parent;
+static bool general_active;
+static Page equation_parent = PhysicsList, tool_parent = CasMenu;
+static Page search_parent, related_parent;
+static bool equation_from_related;
+static Selection search_selection, related_selection;
+static Field search_query;
+typedef struct { int course, chapter, row; bool equation, chemistry; } SearchMatch;
+enum { SEARCH_LIMIT = 64 };
+static SearchMatch search_matches[SEARCH_LIMIT], related_matches[SEARCH_LIMIT];
+static int search_count, search_total, related_count;
+static bool equation_search;
+static Selection general_selection, equation_favourite_selection, session_selection, course_list_selection;
 static Selection course_selection, chapter_selection, topic_selection, topic_action, cas_selection, settings_selection;
 static Selection history_selection, example_selection, physics_selection, physics_subject;
 static Selection unit_group, unit_from, unit_to;
-static Selection favourite_selection, decimal_selection;
+
+static Selection favourite_selection, decimal_selection, physics_list_selection;
+static FavouriteGroup favourite_group;
 static Field physics_fields[SCIENCE_VARIABLES], unit_input;
 static int physics_focus, physics_first, physics_offset, science_result_offset;
 static bool chemistry_sheet, unit_input_error, unit_copied;
 static bool physics_answer_ok;
 static char physics_notes[SCIENCE_REFERENCE_SIZE], unit_expression[112], unit_work[112], unit_number[32];
 static ScienceWorking science_work;
-static Field prompt, forms[6];
+static Field prompt, forms[6], session_name;
 static const char *form_labels[6];
-static int field_count, active_field, read_offset, read_length, shortcuts_offset;
+static int field_count, active_field, form_first, read_offset, read_length, shortcuts_offset;
 static const Topic *form_topic;
 static Operation form_operation, result_operation;
 static ExtraTool extra_tool;
@@ -78,20 +113,52 @@ static int tool_first, tool_offset;
 static Favourite favourites[FAVOURITE_LIMIT];
 static int favourite_count;
 static bool favourite_origin;
-static const char *pin_notice;
+static const char *pin_notice, *session_error;
 static CalcEntry calculations[CALCULATION_LIMIT];
 static ExtraResult extra_results[EXTRA_LIMIT];
 static int calc_count, calc_row, calc_first, calc_column, extras_count, extras_row, extras_first;
 static HistoryEntry history[HISTORY_LIMIT];
 static Solution solution;
-static int history_count;
+static int history_count, history_offset;
 static bool has_result, degrees = true, decimal, show_steps = true, shift;
 static int decimal_places = 5;
 static enum { AlphaOff, AlphaOnce, AlphaLocked } alpha;
 static char clipboard[EXPRESSION_SIZE];
 static char ans[EXPRESSION_SIZE], result_question[EXPRESSION_SIZE];
 static const char *read_content, *read_title;
+static const char *related_read_content, *related_read_title;
+static Page related_reading_parent;
+static SearchMatch related_topic;
+static int related_read_offset;
 static WrappedLine wrapped[WRAP_LIMIT];
+typedef struct {
+    CalcEntry calculations[CALCULATION_LIMIT];
+    HistoryEntry history[HISTORY_LIMIT];
+    CasVariables variables;
+    char ans[EXPRESSION_SIZE];
+    int calc_count, history_count, preferences, decimal_places;
+    unsigned sequence;
+} Session;
+static char session_names[SESSION_LIMIT][SESSION_NAME_SIZE];
+static bool session_exists[SESSION_LIMIT];
+static int session_count, active_session;
+
+static void restore_session(const Session *next) {
+    memcpy(calculations, next->calculations, sizeof(calculations));
+    memcpy(history, next->history, sizeof(history));
+    memcpy(ans, next->ans, sizeof(ans));
+    cas_set_variables(&next->variables);
+    calc_count = next->calc_count;
+    history_count = next->history_count;
+    calc_first = 0;
+    has_result = false;
+    prompt = (Field){0};
+    page = Prompt;
+}
+
+static bool valid_reuse(const ReuseData *reuse);
+
+#include "sessions.inc"
 
 static void rectangle(int x, int y, int width, int height, eadk_color_t colour) {
     if (width <= 0 || height <= 0) return;
@@ -99,6 +166,7 @@ static void rectangle(int x, int y, int width, int height, eadk_color_t colour) 
 }
 
 static const uint8_t *font_glyph(unsigned char ch) {
+    if (ch == MathLiteralSlash) ch = '/';
     if (ch >= MathMultiply && ch <= MathApprox) return glyphs[95+ch-MathMultiply];
     if (ch < ' ' || ch > '~') ch = '?';
     return glyphs[ch-' '];
@@ -157,7 +225,58 @@ static void draw_text(int x, int y, const char *text, eadk_color_t ink,
 }
 
 static void string_at(int x, int y, const char *text, eadk_color_t ink, eadk_color_t paper) {
-    draw_text(x, y, text, ink, paper, false);
+    bool science = page == Reading && y >= 25 && y < FOOTER && course_selection.row >= 0 &&
+                   course_selection.row < course_count && !strncmp(courses[course_selection.row].code, "846", 3);
+    if (!science) { draw_text(x, y, text, ink, paper, false); return; }
+    static const char *const terms[] = {
+        "photosynthesis", "respiration", "diffusion", "osmosis", "active transport", "nucleus",
+        "mitochondria", "ribosomes", "enzymes", "antibodies", "antigens", "chromosomes", "alleles",
+        "genotype", "phenotype", "negative feedback", "energy", "current", "potential difference",
+        "resistance", "resultant", "velocity", "acceleration", "frequency", "wavelength",
+        "irradiation", "contamination", "isotopes", "protons", "neutrons", "electrons",
+        "oxidation", "reduction", "activation energy", "equilibrium", "moles", "catalyst",
+        "exothermic", "endothermic", "independent variable", "dependent variable",
+        "systematic", "random", "concentration", "Key ideas", "Understand the mechanism",
+        "Apply your understanding", "Related equations", "Related formulas", "water",
+        "membrane", "partially permeable", "concentration gradient", "turgid", "flaccid",
+        "plasmids", "DNA", "chloroplasts", "mitosis", "meiosis", "stem cells",
+        "pathogens", "vaccination", "antibiotics", "natural selection", "haemoglobin",
+        "platelets", "glucose", "insulin", "glucagon", "thyroxine", "adrenaline",
+        "receptors", "effectors", "synapses", "neurones", "habitat", "biodiversity",
+        "mass", "charge", "force", "momentum", "density", "pressure", "half-life",
+        "magnetic field", "induction", "infrared", "redshift", "ionic", "covalent",
+        "delocalised", "ions", "electrolysis", "oxidation", "reduction", "precipitate",
+        "chromatography", "functional group", "hydrocarbons", "polymers", "yield"
+    };
+    const char *at = text;
+    while (*at && x < EADK_SCREEN_WIDTH) {
+        const char *first = at;
+        size_t bold_length = 0;
+        while (*at && !bold_length) {
+            if (at == text || !isalpha((unsigned char)at[-1])) {
+                for (unsigned i = 0; i < sizeof(terms) / sizeof(*terms); i++) {
+                    size_t length = strlen(terms[i]);
+                    size_t j = 0;
+                    while (j < length && at[j] && tolower((unsigned char)at[j]) == tolower((unsigned char)terms[i][j])) j++;
+                    if (j == length && !isalpha((unsigned char)at[j])) { bold_length = length; break; }
+                }
+            }
+            if (!bold_length) at++;
+        }
+        char segment[EADK_SCREEN_WIDTH / CHAR_WIDTH + 1];
+        int length = (int)(at - first);
+        if (length) {
+            snprintf(segment, sizeof(segment), "%.*s", length, first);
+            draw_text(x, y, segment, ink, paper, false);
+            x += length * CHAR_WIDTH;
+        }
+        if (bold_length) {
+            snprintf(segment, sizeof(segment), "%.*s", (int)bold_length, at);
+            draw_text(x, y, segment, ink, paper, true);
+            x += (int)bold_length * CHAR_WIDTH;
+            at += bold_length;
+        }
+    }
 }
 
 static void clipped(int x, int y, const char *text, int columns, eadk_color_t ink, eadk_color_t paper) {
@@ -192,6 +311,11 @@ static void title_with_tier(int x, int y, const char *title, int columns,
     } else clipped(x, y, title, columns, ink, paper);
 }
 
+static const char *modifier_text(void) {
+    return shift ? (alpha ? "ABC" : "SHIFT") :
+           alpha == AlphaLocked ? "abc*" : alpha ? "abc" : "";
+}
+
 static void header(const char *title, const char *tag, bool filled) {
     eadk_color_t paper = filled ? Gold : White;
     rectangle(0, 0, 320, 21, paper);
@@ -201,8 +325,14 @@ static void header(const char *title, const char *tag, bool filled) {
         string_at(312 - width, 3, tag, Ink, paper);
         margin += width + 7;
     }
+    const char *modifier = modifier_text();
+    int modifier_width = (int)strlen(modifier) * CHAR_WIDTH;
+    if (modifier_width) {
+        string_at(8, 3, modifier, filled ? White : Blue, paper);
+        if (margin < modifier_width + 15) margin = modifier_width + 15;
+    }
     int columns = (320 - 2*margin)/CHAR_WIDTH;
-    char centered[TEXT_WIDTH + 1];
+    char centered[EADK_SCREEN_WIDTH / CHAR_WIDTH + 1];
     const char *suffix = higher_suffix(title);
     int len = (int)strlen(title);
     if (len <= columns) memcpy(centered,title,(size_t)len + 1);
@@ -228,9 +358,7 @@ static void header(const char *title, const char *tag, bool filled) {
 static void home_header(void) {
     rectangle(0, 0, 320, 21, Gold);
     string_at(6, 3, degrees ? "deg" : "rad", White, Gold);
-    const char *modifier = shift ? (alpha ? "ABC" : "SHIFT") :
-                           alpha == AlphaLocked ? "abc*" : alpha ? "abc" : "";
-    string_at(38, 3, modifier, White, Gold);
+    string_at(38, 3, modifier_text(), White, Gold);
     string_at((320 - 5*CHAR_WIDTH)/2, 3, "NUMAI", White, Gold);
 }
 
@@ -238,11 +366,7 @@ static void footer(const char *label) {
     if (pin_notice) label = pin_notice;
     eadk_color_t paper = Light;
     rectangle(0, FOOTER, 320, 14, paper);
-    const char *modifier = page == Prompt ? "" : shift ? (alpha ? "ABC " : "SHIFT ") :
-                           alpha == AlphaLocked ? "abc* " : alpha ? "abc " : "";
-    const int prefix = (int)strlen(modifier);
-    string_at(5, FOOTER, modifier, Grey, paper);
-    clipped(5 + prefix * CHAR_WIDTH, FOOTER, label, TEXT_WIDTH - prefix, Grey, paper);
+    clipped(5, FOOTER, label, TEXT_WIDTH, Grey, paper);
 }
 
 static void scrollbar(int first, int total, int visible, int y, int height) {
@@ -272,29 +396,7 @@ static void wrap(const char *text, int width, bool highlight, int *count) {
     }
 }
 
-static void reader(int top, int bottom) {
-    int visible = (bottom - top) / 16;
-    int max = read_length > visible ? read_length - visible : 0;
-    if (read_offset > max) read_offset = max;
-    if (read_offset < 0) read_offset = 0;
-    for (int i = 0; i < visible && i + read_offset < read_length; i++) {
-        WrappedLine l = wrapped[i + read_offset];
-        int y = top + 16 * i;
-        char text[TEXT_WIDTH + 1];
-        memcpy(text, l.source, (size_t)l.length);
-        text[l.length] = 0;
-        if (l.highlight) {
-            rectangle(5, y, 308, 16, PaleGold);
-            rectangle(5, y, 3, 16, Gold);
-        }
-        eadk_color_t paper = l.highlight ? PaleGold : White;
-        if (page == PhysicsDetail && physics_reference_heading(text)) {
-            draw_text(11, y + 1, text, Ink, paper, true);
-            rectangle(11, y + 15, l.length * CHAR_WIDTH, 1, Ink);
-        } else string_at(11, y + 1, text, Ink, paper);
-    }
-    scrollbar(read_offset, read_length, visible, top, bottom - top);
-}
+#include "revision_view.inc"
 
 static int selection_start(const Field *field) {
     return field->cursor < field->anchor ? field->cursor : field->anchor;
@@ -335,9 +437,74 @@ static void entry(int x, int y, int width, const Field *field, const char *place
         rectangle(x + 4 + (field->cursor - start) * CHAR_WIDTH, y + 3, 1, 12, Blue);
 }
 
+static void large_math_text(int x, int y, const char *text, uint16_t ink, uint16_t paper, bool small);
+
+static bool expression_draft(const Field *field, char preview[EXPRESSION_SIZE], int width, bool large,
+                             MathBox *box) {
+    const char *text = field->text;
+    if (!*text) return false;
+    int length = (int)strlen(text);
+    if (field->anchor != field->cursor &&
+        (selection_start(field) != 0 || selection_end(field) != length)) return false;
+    // Let the plain editor scroll past the screen when an expression is long.
+    if (length * (large ? 9 : CHAR_WIDTH) > width - 3) return false;
+    if (!strpbrk(text, "/^") && !strstr(text, "sqrt(")) {
+        if (!large) return false;
+    }
+    // Use the plain editor for command prefixes and values with explicit units.
+    if (strpbrk(text, "<>{}[]")) return false;
+    for (int i = 1; i + 1 < length; i++)
+        if (text[i] == ' ' && isdigit((unsigned char)text[i - 1]) && isalpha((unsigned char)text[i + 1]))
+            return false;
+    int depth = 0;
+    for (const char *at = text; *at; at++) {
+        if (*at == '(') depth++;
+        if (*at == ')' && --depth < 0) return false;
+    }
+    if (length + depth + 1 >= EXPRESSION_SIZE) return false;
+    memcpy(preview, text, (size_t)length);
+    if (text[length - 1] == '^' || text[length - 1] == '/') preview[length++] = '?';
+    memset(preview + length, ')', (size_t)depth);
+    preview[length + depth] = 0;
+    *box = large ? measure_calculation(preview, width - 3) : measure_math(preview, width - 3);
+    return true;
+}
+
+static int expression_height(const Field *field, int width, int max, bool large) {
+    char preview[EXPRESSION_SIZE];
+    MathBox box;
+    int base = large ? 30 : 18;
+    if (!expression_draft(field, preview, width - 8, large, &box)) return base;
+    int height = box.above + box.below + 6;
+    if (large && height < base) height = base;
+    return height + (large ? 2 : 0) > max ? base : height + (large ? 2 : 0);
+}
+
+static void expression_entry(int x, int y, int width, int height, const Field *field,
+                             const char *placeholder, bool focused, bool large) {
+    char preview[EXPRESSION_SIZE];
+    MathBox box;
+    if (!expression_draft(field, preview, width - 8, large, &box) ||
+        box.above + box.below + 4 > height) {
+        entry(x, y + (height - 18) / 2, width, field, placeholder, focused);
+        return;
+    }
+    rectangle(x, y, width, height, focused ? Gold : Line);
+    rectangle(x + 1, y + 1, width - 2, height - 2, White);
+    int mid = y + (height - box.above - box.below) / 2 + box.above;
+    bool selected = focused && field->anchor != field->cursor;
+    eadk_color_t paper = selected ? PaleGold : White;
+    if (selected) rectangle(x + 3, mid - box.above - 1, box.width + 2, box.above + box.below + 2, paper);
+    MathCanvas canvas = {large ? large_math_text : math_text, rectangle, Ink, paper};
+    MathCaret caret = paint_math_input(preview, width - 11, x + 4, mid, &canvas, field->cursor, large);
+    if (focused && !selected) rectangle(caret.x, caret.y, 1, caret.height, Blue);
+}
+
 static const Course *course(void) { return &courses[course_selection.row]; }
 static const Chapter *chapter(void) { return &course()->chapters[chapter_selection.row]; }
 static const Topic *topic(void) { return &chapter()->topics[topic_selection.row]; }
+
+#include "search.inc"
 
 static const PhysicsEquation *equation(void) {
     return &(chemistry_sheet ? chemistry_equations : physics_equations)[physics_selection.row];
@@ -364,9 +531,38 @@ static const char *favourite_title(const Favourite *item) {
     return courses[item->course].chapters[item->chapter].topics[item->row].title;
 }
 
+static int favourite_index(int row) {
+    for (int i = 0; i < favourite_count; i++) {
+        const Favourite *item = &favourites[i];
+        FavouriteGroup group = item->equation ? (item->chemistry ? ChemistryPins : PhysicsPins) : CoursePins;
+        if (group == favourite_group && row-- == 0) return i;
+    }
+    return -1;
+}
+
+static void open_favourites(FavouriteGroup group, Page parent) {
+    favourite_group = group;
+    favourite_parent = parent;
+    favourite_selection = (Selection){0};
+    page = Favourites;
+}
+
+static Operation cas_menu_operation(int row) {
+    int index = row - CasOperationStart;
+    return (Operation)(index >= Expand ? index + 1 : index);
+}
+
 static const char *selection_text(Page menu, int i) {
     switch (menu) {
-        case Toolbox: return i == course_count ? "Favourites" : courses[i].title;
+        case Toolbox: return i == 0 ? "Favourites" : i == course_count + 1 ? "Search topics" : courses[i - 1].title;
+        case RelatedEquations: return match_title(&related_matches[i]);
+        case GeneralMenu: return general_items[i];
+        case SessionList: {
+            static char label[SESSION_NAME_SIZE + 3];
+            snprintf(label, sizeof(label), "%s%s", session_names[i], i == active_session ? " *" : "");
+            return label;
+        }
+        case EquationFavourites: return i == 0 ? "Physics" : "Chemistry";
         case Chapters: return course()->chapters[i].title;
         case Topics: return chapter()->topics[i].title;
         case TopicMenu: {
@@ -377,13 +573,16 @@ static const char *selection_text(Page menu, int i) {
             return i == 0 ? (topic()->example ? "Original example" : "Calculator example") :
                             topic()->detail->examples[i - 1].title;
         case CasMenu:
-            if (i == 0) return physics_sheet_title;
-            if (i == 1) return chemistry_sheet_title;
-            if (i == 2) return "Unit conversions";
-            if (i < CAS_TOOL_COUNT + OperationCount) return operation_names[i - CAS_TOOL_COUNT];
-            if (i == CAS_TOOL_COUNT + OperationCount) return "History";
-            return extra_tool_names[i - CAS_TOOL_COUNT - OperationCount - 1];
-        case Favourites: return favourite_title(&favourites[i]);
+            if (i == CasSearch) return "Search equations";
+            if (i == CasFavourites) return "Favourites";
+            if (i == CasPhysics) return physics_sheet_title;
+            if (i == CasChemistry) return chemistry_sheet_title;
+            if (i == CasUnits) return "Unit conversions";
+            if (i == CasRearrange) return extra_tool_names[PhysicsRearrange];
+            if (i == CasTrig) return extra_tool_names[TrigSolver];
+            if (i == CasTriangle) return extra_tool_names[TriangleSolver];
+            return operation_names[cas_menu_operation(i)];
+        case Favourites: return favourite_title(&favourites[favourite_index(i)]);
         case DecimalPlaces: {
             static char number[24];
             snprintf(number,sizeof(number),"%d%s",i,i == 5 ? " (default)" : "");
@@ -402,8 +601,7 @@ static const char *selection_text(Page menu, int i) {
             if (i == 0) return degrees ? "Angle unit                    Degrees" : "Angle unit                    Radians";
             if (i == 1) return decimal ? "Numeric answers               Decimal" : "Numeric answers              Fractions";
             if (i == 2) return show_steps ? "Worked steps                      On" : "Worked steps                     Off";
-            if (i == 3) return "Keyboard shortcuts";
-            if (i == 4) return "CAS help";
+            if (i == 3) return "CAS help";
             static char label[43];
             snprintf(label,sizeof(label),"Decimal places                     %d",decimal_places);
             return label;
@@ -414,15 +612,23 @@ static const char *selection_text(Page menu, int i) {
 
 static int count_for(Page menu) {
     switch (menu) {
-        case Toolbox: return course_count + 1;
+        case Toolbox: return course_count + 2;
+        case RelatedEquations: return related_count;
         case Chapters: return course()->count;
         case Topics: return chapter()->count;
         case TopicMenu: return topic()->labels[0] ? 4 : 3;
         case Examples: return 1 + EXTRA_EXAMPLES;
-        case CasMenu: return CAS_TOOL_COUNT + OperationCount + 1 + ExtraToolCount;
-        case Favourites: return favourite_count;
+        case CasMenu: return CasCount;
+        case GeneralMenu: return GeneralCount;
+        case EquationFavourites: return 2;
+        case SessionList: return session_count;
+        case Favourites: {
+            int count = 0;
+            while (favourite_index(count) >= 0) count++;
+            return count;
+        }
         case DecimalPlaces: return 11;
-        case PhysicsList: return chemistry_sheet ? chemistry_equation_count : physics_equation_count;
+        case PhysicsList: return 2 + (chemistry_sheet ? chemistry_equation_count : physics_equation_count);
         case PhysicsSubjects: {
             const PhysicsEquation *item = equation();
             int count = 0;
@@ -432,20 +638,24 @@ static int count_for(Page menu) {
         case UnitGroups: return unit_group_count;
         case UnitFrom: case UnitTo: return selected_unit_group()->count;
         case History: return history_count;
-        case Settings: return 6;
+        case Settings: return 5;
         default: return 0;
     }
 }
 
 static Selection *selection_for(Page menu) {
     switch (menu) {
-        case Toolbox: return &course_selection;
+        case Toolbox: return &course_list_selection;
+        case RelatedEquations: return &related_selection;
+        case GeneralMenu: return &general_selection;
+        case SessionList: return &session_selection;
+        case EquationFavourites: return &equation_favourite_selection;
         case Chapters: return &chapter_selection;
         case Topics: return &topic_selection;
         case TopicMenu: return &topic_action;
         case Examples: return &example_selection;
         case CasMenu: return &cas_selection;
-        case PhysicsList: return &physics_selection;
+        case PhysicsList: return &physics_list_selection;
         case PhysicsSubjects: return &physics_subject;
         case UnitGroups: return &unit_group;
         case UnitFrom: return &unit_from;
@@ -478,14 +688,16 @@ static void draw_list(const char *title, const char *tag, bool filled) {
         }
         title_with_tier(21, y + 3, selection_text(page, i), 41, active ? Blue : Ink, paper);
     }
-    if (page == Toolbox) {
-        string_at(8, 181, "Course notes, methods and examples", Grey, White);
-        string_at(8, 197, "Shift+VAR pins topics and equations.", Grey, White);
-    }
+
+    if (page == SessionList)
+        string_at(8, 186, session_store.records ? "Auto-saves to the Python app." :
+                  "Sessions last until NumAI closes.", Grey, White);
     if (!count) string_at(8, 36, page == Favourites ?
                           "No favourites yet. Pin with Shift+VAR." : "No saved calculations yet.", Grey, White);
     scrollbar(s->first, count, rows, y0, row_height * rows);
-    footer(page == Settings ? "OK: change   BACK: return" :
+    footer(page == Toolbox ? "TOOLBOX: search   OK: open   BACK" :
+           page == CasMenu ? "VAR: search equations   OK   BACK" :
+           page == Settings ? "OK: change   BACK: return" :
            page == Favourites ? "OK: open   SHIFT+VAR: unpin   BACK" :
            page == Topics || page == TopicMenu ? "OK: open   SHIFT+VAR: pin   BACK" :
            "OK: choose   UP/DOWN: move   BACK");
@@ -493,8 +705,8 @@ static void draw_list(const char *title, const char *tag, bool filled) {
 
 static const struct { const char *key; const char *function; } shortcuts[] = {
     {"TOOLBOX", "Browse courses and topics"},
-    {"VAR", "Open CAS, equations, history"},
-    {"SHIFT+EXE", "Open or close Settings"},
+    {"VAR", "Open Equations and CAS"},
+    {"SHIFT+EXE", "Open or close NumAI menu"},
     {"OK / EXE", "Open item or calculate"},
     {"UP / DOWN", "Move, scroll or change field"},
     {"BACK / HOME", "Go back / return to launcher"},
@@ -503,16 +715,18 @@ static const struct { const char *key; const char *function; } shortcuts[] = {
     {"SHIFT+x^2", "Enter >"},
     {"SHIFT+sqrt", "Enter <"},
     {"ALPHA", "Enter a letter"},
+    {"ALPHA+.", "Enter factorial !"},
     {"SHIFT, ALPHA", "Enter capital letters"},
     {"ALPHA twice", "Lock letter entry"},
     {"SHIFT+arrows", "Select text"},
     {"SHIFT+x,n,t", "Cut selected text"},
-    {"SHIFT+VAR", "Copy, or pin a topic"},
+    {"SHIFT+VAR", "Copy or toggle favourite"},
     {"SHIFT+TOOLBOX", "Paste copied text"},
     {"SHIFT+DEL", "Clear text to the right"},
     {"SHIFT+power", "Enter -> to store a value"},
     {"SHIFT+trig", "Enter inverse trig"},
     {"ANS", "Insert the previous value"},
+    {"ALPHA+ANS", "Calculation home screen"},
     {">*", "Factorise"},
     {">/", "Simplify"},
     {"=>", "Solve for x"},
@@ -539,7 +753,7 @@ static void draw_shortcuts(void) {
     rectangle(function_x, top, 1, head_height + SHORTCUT_ROWS * row_height, Line);
     scrollbar(shortcuts_offset, SHORTCUT_COUNT, SHORTCUT_ROWS,
               top + head_height, SHORTCUT_ROWS * row_height);
-    footer("UP/DOWN: scroll    BACK: settings");
+    footer("UP/DOWN: scroll    BACK: menu");
 }
 
 static void equation_title(const PhysicsEquation *item, char *title, size_t size) {
@@ -553,35 +767,45 @@ static void display_wrapped_line(const WrappedLine *line, int x, int y, eadk_col
 }
 
 static void draw_physics_list(void) {
-    const int rows = 2, height = 98, top = 25;
-    Selection *sel = &physics_selection;
+    const int height = 88, favourite_height = 24, top = 25;
+    Selection *sel = &physics_list_selection;
     int count = count_for(PhysicsList);
     header(chemistry_sheet ? chemistry_sheet_title : physics_sheet_title, chemistry_sheet ? "8462" : "8463", false);
     if (sel->row < sel->first) sel->first = sel->row;
-    if (sel->row >= sel->first + rows) sel->first = sel->row - rows + 1;
-    for (int offset = 0; offset < rows && sel->first + offset < count; offset++) {
-        int row = sel->first + offset, y = top + offset * height;
+    if (sel->row > sel->first + (sel->first == 0 ? 2 : 1)) sel->first = sel->row - 1;
+    int shown = 0;
+    for (int row = sel->first, y = top; row < count; row++) {
+        int row_height = row == 0 ? favourite_height : height;
+        if (y + row_height > FOOTER) break;
         bool active = row == sel->row;
-        const PhysicsEquation *item = &(chemistry_sheet ? chemistry_equations : physics_equations)[row];
         eadk_color_t paper = active ? PaleGold : White;
         if (active) {
-            rectangle(4, y, 311, height - 1, paper);
+            rectangle(4, y, 311, row_height - 1, paper);
             string_at(8, y + 2, ">", Blue, paper);
         }
-        char title[80];
-        equation_title(item, title, sizeof(title));
-        title_with_tier(21, y + 2, title, 41, active ? Blue : Ink, paper);
-        char words[SCIENCE_WORD_SIZE];
-        physics_word_equation(item, words);
-        int line_count = 0;
-        wrap(words, 41, false, &line_count);
-        for (int i = 0; i < line_count && i < 5; i++) {
-            if (i == 4 && line_count > 5) string_at(21, y + 18 + i*14, "...  OK for full equation", Grey, paper);
-            else display_wrapped_line(&wrapped[i], 21, y + 18 + i*14, Grey, paper);
+        if (row == 0) {
+            string_at(21, y + 2, "Favourite Equations", active ? Blue : Ink, paper);
+        } else if (row == count - 1) {
+            string_at(21, y + 2, "Search equations", active ? Blue : Ink, paper);
+        } else {
+            const PhysicsEquation *item = &(chemistry_sheet ? chemistry_equations : physics_equations)[row - 1];
+            char title[80];
+            equation_title(item, title, sizeof(title));
+            title_with_tier(21, y + 2, title, 41, active ? Blue : Ink, paper);
+            char words[SCIENCE_WORD_SIZE];
+            physics_word_equation(item, words);
+            int line_count = 0;
+            wrap(words, 41, false, &line_count);
+            for (int i = 0; i < line_count && i < 5; i++) {
+                if (i == 4 && line_count > 5) string_at(21, y + 18 + i*14, "...  OK for full equation", Grey, paper);
+                else display_wrapped_line(&wrapped[i], 21, y + 18 + i*14, Grey, paper);
+            }
         }
+        y += row_height;
+        shown++;
     }
-    scrollbar(sel->first, count, rows, top, rows * height);
-    footer("OK: equation   UP/DOWN: browse   BACK");
+    scrollbar(sel->first, count, shown, top, FOOTER - top);
+    footer("VAR: search   SHIFT+VAR: favourite");
 }
 
 static void draw_physics_detail(void) {
@@ -612,40 +836,44 @@ static void draw_physics_form(void) {
     snprintf(caption, sizeof(caption), "Find %s [%s]", subject->name, subject->unit);
     clipped(8, 25, caption, TEXT_WIDTH, Blue, White);
     physics_subject_equation(item, subject_index, caption, sizeof(caption));
-    int formula_lines = 0;
-    wrap(caption, TEXT_WIDTH, false, &formula_lines);
-    for (int i = 0; i < formula_lines; i++) display_wrapped_line(&wrapped[i], 8, 39 + 14*i, Ink, White);
-    const int first_field_y = 40 + 14*formula_lines, field_spacing = 35, visible = 3;
-    int fields = item->count - 1;
-    if (physics_focus < physics_first) physics_first = physics_focus;
-    if (physics_focus >= physics_first + visible) physics_first = physics_focus - visible + 1;
-    for (int i = physics_first; i < fields && i < physics_first + visible; i++) {
+    MathBox formula = revision_line(caption, 0, 0, Ink, White, false);
+    revision_line(caption, 8, 40 + formula.above, Ink, White, true);
+    int first_y = 44 + formula.above + formula.below;
+    int fields = item->count - 1, heights[SCIENCE_VARIABLES], labels[SCIENCE_VARIABLES];
+    for (int i = 0; i < fields; i++) {
         const PhysicsVariable *v = &item->variables[physics_slot(i)];
-        int y = first_field_y + (i - physics_first)*field_spacing;
         snprintf(caption, sizeof(caption), "%s: %s [%s]", v->symbol, v->name, v->unit);
-        clipped(8, y, caption, TEXT_WIDTH, i == physics_focus ? Blue : Grey, White);
-        const char *hint = v->flags & ScienceOptional ? "Optional (0 if blank)" :
-                           i == physics_focus ? "Value or value + unit" : NULL;
-        entry(7, y + 14, 306, &physics_fields[physics_slot(i)], hint, i == physics_focus);
+        MathBox label = revision_line(caption, 0, 0, Grey, White, false);
+        labels[i] = label.above + label.below;
+        heights[i] = expression_height(&physics_fields[physics_slot(i)], 306, 50, false);
     }
-    scrollbar(physics_first, fields, visible, first_field_y, visible*field_spacing);
-    if (*science_work.answer) {
-        int shown = fields < visible ? fields : visible;
-        int y = first_field_y + shown*field_spacing, count = 0;
-        if (*science_work.substituted) {
-            char substituted[SCIENCE_SUBSTITUTION_SIZE + 13];
-            snprintf(substituted, sizeof(substituted), "Substitute: %s", science_work.substituted);
-            wrap(substituted, TEXT_WIDTH, false, &count);
-            for (int i = 0; i < count && i < 3; i++, y += 14)
-                display_wrapped_line(&wrapped[i], 8, y, Grey, White);
+    if (physics_focus < physics_first) physics_first = physics_focus;
+    int required = 0;
+    int bottom = *science_work.answer ? 194 : FOOTER - 3;
+    for (int i = physics_focus; i >= physics_first; i--) {
+        required += heights[i] + labels[i] + 6;
+        if (required > bottom - first_y && i < physics_focus) {
+            physics_first = i + 1;
+            break;
         }
-        count = 0;
-        wrap(science_work.answer, TEXT_WIDTH, false, &count);
-        eadk_color_t paper = physics_answer_ok ? PaleGold : Light;
-        rectangle(6, y, 308, 14*count + 4, paper);
-        for (int i = 0; i < count; i++)
-            display_wrapped_line(&wrapped[i], 10, y + 2 + i*14, Ink, paper);
     }
+    int y = first_y, shown = 0;
+    for (int i = physics_first; i < fields && y + heights[i] + labels[i] + 6 <= bottom; i++) {
+        const PhysicsVariable *v = &item->variables[physics_slot(i)];
+        bool focused = i == physics_focus;
+        snprintf(caption, sizeof(caption), "%s: %s [%s]", v->symbol, v->name, v->unit);
+        MathBox label = revision_line(caption, 0, 0, Grey, White, false);
+        revision_line(caption, 8, y + label.above, focused ? Blue : Grey, White, true);
+        const char *hint = v->flags & ScienceOptional ? "Optional (0 if blank)" :
+                           focused ? "Value or value + unit" : NULL;
+        expression_entry(7, y + labels[i], 306, heights[i], &physics_fields[physics_slot(i)],
+                         hint, focused, false);
+        y += heights[i] + labels[i] + 6;
+        shown++;
+    }
+    if (shown) scrollbar(physics_first, fields, shown, first_y, bottom - first_y);
+    if (*science_work.answer)
+        clipped(8, 199, science_work.answer, TEXT_WIDTH, Ink, PaleGold);
     footer("UP/DOWN: field   EXE: solve   BACK");
 }
 
@@ -656,7 +884,9 @@ static void draw_science_result(void) {
     snprintf(substitution, sizeof(substitution), "Substitute: %s", science_work.substituted);
     read_length = 0;
     read_offset = science_result_offset;
+    wrap(science_work.answer, TEXT_WIDTH, physics_answer_ok, &read_length);
     wrap(formula, TEXT_WIDTH, false, &read_length);
+    if (*science_work.substituted) wrap(substitution, TEXT_WIDTH, false, &read_length);
     if (*science_work.conversions) {
         wrap("\nUnit conversions", TEXT_WIDTH, false, &read_length);
         wrap(science_work.conversions, TEXT_WIDTH, false, &read_length);
@@ -665,8 +895,6 @@ static void draw_science_result(void) {
         wrap("\nWorking", TEXT_WIDTH, false, &read_length);
         wrap(science_work.steps, TEXT_WIDTH, false, &read_length);
     }
-    if (*science_work.substituted) wrap(substitution, TEXT_WIDTH, false, &read_length);
-    wrap(science_work.answer, TEXT_WIDTH, physics_answer_ok, &read_length);
     reader(27, 222);
     science_result_offset = read_offset;
     footer("UP/DOWN: scroll   BACK: inputs");
@@ -680,8 +908,9 @@ static void draw_unit_conversion(void) {
     clipped(8, 30, selected_unit_group()->name, TEXT_WIDTH, Ink, White);
     clipped(8, 48, title, TEXT_WIDTH, Blue, White);
     if (page == UnitValue) {
-        entry(7, 74, 306, &unit_input, "Enter a number or expression", true);
-        if (unit_input_error) string_at(8, 102, "Check the value or its size.", Ink, White);
+        int height = expression_height(&unit_input, 306, 66, false);
+        expression_entry(7, 74, 306, height, &unit_input, "Enter a number or expression", true, false);
+        if (unit_input_error) string_at(8, 80 + height, "Check the value or its size.", Ink, White);
         footer("EXE: convert   BACK: change unit");
         return;
     }
@@ -713,11 +942,20 @@ static void draw_tool(void) {
                        extra_tool == TrigSolver ? "Use sin, cos or tan. Set both bounds." :
                        "Use [name] for multi-letter symbols.";
     string_at(8,26,hint,Grey,White);
-    const int visible = 4, top = 48, spacing = 39;
+    const int top = 48;
+    int heights[6];
+    for (int i = 0; i < field_count; i++) heights[i] = expression_height(&forms[i], 306, 64, false);
     if (active_field < tool_first) tool_first = active_field;
-    if (active_field >= tool_first+visible) tool_first = active_field-visible+1;
-    for (int row = 0; row < visible && tool_first+row < field_count; row++) {
-        int i = tool_first+row, y = top+row*spacing;
+    int needed = 0;
+    for (int i = active_field; i >= tool_first; i--) {
+        needed += heights[i] + 21;
+        if (needed > FOOTER - top) {
+            tool_first = i + 1;
+            break;
+        }
+    }
+    int y = top, shown = 0;
+    for (int i = tool_first; i < field_count && y + heights[i] + 17 < FOOTER; i++) {
         char angle_label[20];
         const char *label = form_labels[i];
         if (extra_tool == TriangleSolver && i >= 3) {
@@ -725,9 +963,11 @@ static void draw_tool(void) {
             label = angle_label;
         }
         string_at(8,y,label,i == active_field ? Blue : Grey,White);
-        entry(7,y+15,306,&forms[i],NULL,i == active_field);
+        expression_entry(7,y+15,306,heights[i],&forms[i],NULL,i == active_field,false);
+        y += heights[i] + 21;
+        shown++;
     }
-    scrollbar(tool_first,field_count,visible,top,visible*spacing);
+    scrollbar(tool_first,field_count,shown,top,FOOTER - top);
     footer("UP/DOWN: field   EXE: solve   BACK");
 }
 
@@ -755,29 +995,77 @@ static void draw(void) {
         case UnitFrom: draw_list("Convert from", NULL, false); break;
         case UnitTo: draw_list("Convert to", NULL, false); break;
         case UnitValue: case UnitResult: draw_unit_conversion(); break;
-        case CasMenu: draw_list("CAS and history", NULL, true); break;
+        case CasMenu: draw_list("Equations and CAS", NULL, true); break;
+        case GeneralMenu: draw_list("NumAI menu", NULL, true); break;
+        case EquationFavourites: draw_list("Equation favourites", NULL, false); break;
+        case SessionList: draw_list("Open session", NULL, false); break;
+        case SessionName:
+            header("New session", NULL, false);
+            string_at(8, 30, "Enter a name (letters, digits or _).", Grey, White);
+            entry(7, 50, 306, &session_name, "Session name", true);
+            const char *storage_hint = session_store.records ? "Saved as session_<name>.py" :
+                                       "Sessions last until NumAI closes.";
+            string_at(8, 82, session_error ? session_error : storage_hint, Grey, White);
+            footer("ALPHA: letters   EXE: create   BACK");
+            break;
+        case About:
+            header("About", NULL, false);
+            string_at(8, 31, "NumAI " NUMAI_VERSION, Ink, White);
+            string_at(8, 51, "Revision and calculation for NumWorks", Grey, White);
+            footer("BACK: menu");
+            break;
+        case Search: draw_search(); break;
+        case RelatedEquations: draw_list("Related equations", NULL, false); break;
         case History: draw_list("History", NULL, false); break;
-        case Settings: draw_list("Settings", NUMAI_VERSION, false); break;
-        case Favourites: draw_list("Favourites",NULL,false); break;
+        case HistoryResult: {
+            const HistoryEntry *item = &history[history_selection.row];
+            header(*item->title ? item->title : operation_names[item->operation], NULL, false);
+            read_length = 0;
+            read_offset = history_offset;
+            wrap(item->question, TEXT_WIDTH, false, &read_length);
+            if (show_steps) wrap(item->solution.steps, TEXT_WIDTH, false, &read_length);
+            wrap(item->solution.answer, TEXT_WIDTH, true, &read_length);
+            reader(27, 222);
+            history_offset = read_offset;
+            footer(item->reuse.kind != ReuseNone ? "OK: reuse inputs   UP/DOWN: read   BACK" :
+                   "UP/DOWN: scroll   BACK: history");
+            break;
+        }
+        case Settings: draw_list("Preferences", NULL, false); break;
+        case Favourites:
+            draw_list(favourite_group == CoursePins ? "Favourites" :
+                      favourite_group == PhysicsPins ? "Physics favourites" : "Chemistry favourites", NULL, false);
+            break;
         case DecimalPlaces: draw_list("Decimal places",NULL,false); break;
         case ToolForm: case ToolOutput: draw_tool(); break;
         case Shortcuts: draw_shortcuts(); break;
         case Form:
             header(form_topic ? form_topic->title : operation_names[form_operation], NULL, false);
-            for (int i = 0; i < field_count; i++) {
-                int y = 27 + i * 38;
-                string_at(8, y, form_labels[i], i == active_field ? Blue : Grey, White);
-                entry(7, y + 15, 306, &forms[i], NULL, i == active_field);
+            int y = 27, heights[6], shown = 0;
+            for (int i = 0; i < field_count; i++) heights[i] = expression_height(&forms[i], 306, 58, false);
+            if (active_field < form_first) form_first = active_field;
+            int required = 0;
+            for (int i = active_field; i >= form_first; i--) {
+                required += heights[i] + 20;
+                if (required > FOOTER - 27) { form_first = i + 1; break; }
             }
-            string_at(8, 32 + field_count * 38, "Enter your values, then press EXE.", Grey, White);
+            for (int i = form_first; i < field_count && y + heights[i] + 17 < FOOTER; i++) {
+                string_at(8, y, form_labels[i], i == active_field ? Blue : Grey, White);
+                expression_entry(7, y + 15, 306, heights[i], &forms[i], NULL, i == active_field, false);
+                y += heights[i] + 20;
+                shown++;
+            }
+            scrollbar(form_first, field_count, shown, 27, FOOTER - 27);
+            if (y + 19 < FOOTER) string_at(8, y + 3, "Enter your values, then press EXE.", Grey, White);
             footer("UP/DOWN: field    EXE: work it out");
             break;
         case Reading:
             header(read_title, NULL, false);
             read_length = 0;
-            wrap(read_content, TEXT_WIDTH, false, &read_length);
+            wrap_topic_reading();
             reader(30, 223);
-            footer("UP/DOWN: scroll    BACK: return");
+            footer(reading_is_topic() && related_count ? "VAR: related equations   UP/DOWN   BACK" :
+                   "UP/DOWN: scroll    BACK: return");
             break;
         case Result:
             header(operation_names[result_operation], NULL, false);
@@ -786,7 +1074,7 @@ static void draw(void) {
             if (show_steps && solution.steps[0]) wrap(solution.steps, TEXT_WIDTH, false, &read_length);
             wrap(solution.answer, TEXT_WIDTH, true, &read_length);
             reader(27, 197);
-            entry(4, 202, 312, &prompt, "Type a question, or press TOOLBOX", page == Result);
+            expression_entry(4, 202, 312, 20, &prompt, "Type a question, or press TOOLBOX", true, false);
             footer("UP/DOWN: read   TOOLBOX   VAR   EXE");
             break;
     }
@@ -808,6 +1096,24 @@ static void replace_range(Field *field, int from, int to, const char *text) {
 
 static void insert(Field *field, const char *text) {
     replace_range(field, selection_start(field), selection_end(field), text);
+}
+
+static void finish_parentheses(Field *field) {
+    int depth = 0;
+    char *end = field->text;
+    for (; *end; end++) {
+        if (*end == '(') depth++;
+        if (*end == ')' && --depth < 0) return;
+    }
+    if (!depth || depth > 18) return;
+    char *at = end;
+    // Keep a closing command brace at the end of the prompt.
+    while (at > field->text && isspace((unsigned char)at[-1])) at--;
+    if (at > field->text && at[-1] == '}') at--;
+    if (end - field->text + depth >= (int)sizeof(field->text)) return;
+    memmove(at + depth, at, (size_t)(end - at) + 1);
+    memset(at, ')', (size_t)depth);
+    field->cursor = field->anchor = (int)strlen(field->text);
 }
 
 static const char *skip_spaces(const char *text) {
@@ -844,7 +1150,7 @@ static void form_for(Operation operation, const Topic *item, Page parent) {
     form_parent = parent;
     form_operation = operation;
     form_topic = item;
-    active_field = 0;
+    active_field = form_first = 0;
     field_count = 0;
     if (item) {
         while (field_count < MAX_FIELDS && item->labels[field_count]) {
@@ -882,13 +1188,36 @@ static void form_for(Operation operation, const Topic *item, Page parent) {
 }
 
 static void record(HistoryEntry *entries, int *count, int limit, const char *question,
-                   Operation operation, const Solution *answer) {
+                   Operation operation, const char *title, const Solution *answer) {
     if (*count < limit) (*count)++;
     for (int i = *count - 1; i > 0; i--) entries[i] = entries[i - 1];
     snprintf(entries[0].question, sizeof(entries[0].question), "%s", question);
+    entries[0].reuse = (ReuseData){0};
     entries[0].operation = operation;
+    snprintf(entries[0].title, sizeof(entries[0].title), "%s", title ? title : "");
     entries[0].solution = *answer;
 }
+
+static void record_form_inputs(void) {
+    char inputs[200];
+    size_t used = 0;
+    for (int i = 0; i < field_count && used < sizeof(inputs) - 1; i++) {
+        if (!*forms[i].text) continue;
+        int added = snprintf(inputs + used, sizeof(inputs) - used, "%s: %s\n",
+                             form_labels[i], forms[i].text);
+        if (added < 0 || (size_t)added >= sizeof(inputs) - used) break;
+        used += (size_t)added;
+    }
+    if (!used) return;
+    Solution *saved = &history[0].solution;
+    size_t length = strlen(saved->steps);
+    if (length >= sizeof(saved->steps) - used) length = sizeof(saved->steps) - used - 1;
+    memmove(saved->steps + used, saved->steps, length);
+    memcpy(saved->steps, inputs, used);
+    saved->steps[used + length] = 0;
+}
+
+#include "reuse.inc"
 
 static void update_ans(char *dest, const Solution *answer) {
     if (!answer->ok) return;
@@ -922,10 +1251,19 @@ static bool build_formula(char output[EXPRESSION_SIZE * 4], const char *formula)
 static void show_result(const char *question, Operation operation, Page parent, bool save) {
     result_operation = operation;
     snprintf(result_question, sizeof(result_question), "%s", question);
-    if (save && solution.ok) {
-        record(history, &history_count, HISTORY_LIMIT, result_question, operation, &solution);
+    if (save) {
+        record(history, &history_count, HISTORY_LIMIT, result_question, operation, NULL, &solution);
         if (operation == Calculate || operation == Definite || operation == Substitute)
             update_ans(ans, &solution);
+        if (parent == Form) capture_form_reuse(form_topic ? ReuseTopic : ReuseCas, operation);
+        else if (parent == Prompt) {
+            history[0].reuse = (ReuseData){.kind=ReuseCas,.id=operation,.count=1,.degrees=degrees};
+            char operand[EXPRESSION_SIZE];
+            prompt_operation(question, operand);
+            snprintf(history[0].reuse.inputs[0], EXPRESSION_SIZE, "%s", operand);
+        }
+        if (parent == Form && field_count > 1) record_form_inputs();
+        session_autosave();
     }
     has_result = true;
     read_offset = 0;
@@ -935,6 +1273,7 @@ static void show_result(const char *question, Operation operation, Page parent, 
 }
 
 static void submit_form(bool example) {
+    for (int i = 0; i < field_count; i++) finish_parentheses(&forms[i]);
     char generated[EXPRESSION_SIZE * 4];
     const char *input = forms[0].text;
     bool formula = form_topic && form_topic->formula;
@@ -957,6 +1296,7 @@ static void submit_form(bool example) {
 }
 
 static void submit_prompt(void) {
+    finish_parentheses(&prompt);
     const char *text = prompt.text;
     if (!*text) return;
     char operand[EXPRESSION_SIZE];
@@ -969,8 +1309,7 @@ static void submit_prompt(void) {
         calculations[0].result=value;
         if (*value.exact) snprintf(ans,sizeof(ans),"%s",value.exact);
         else snprintf(ans,sizeof(ans),"%.17g",value.value);
-        solve_expression(operation,operand,"","",degrees,decimal,&solution);
-        if (solution.ok) record(history,&history_count,HISTORY_LIMIT,operand,operation,&solution);
+        session_autosave();
         calc_first=0;
         set_field(&prompt,"",false);
         page=Prompt;
@@ -1001,10 +1340,14 @@ static void open_equation(void) {
 static bool pin_current(void) {
     Favourite item = {0};
     if (page == Favourites) {
-        if (!favourite_count) return true;
-        item = favourites[favourite_selection.row];
+        int index = favourite_index(favourite_selection.row);
+        if (index < 0) return true;
+        item = favourites[index];
     } else if (page == PhysicsDetail || page == PhysicsList) {
-        item = (Favourite){.row=physics_selection.row,.equation=true,.chemistry=chemistry_sheet};
+        if (page == PhysicsList && (!physics_list_selection.row ||
+            physics_list_selection.row == count_for(PhysicsList) - 1)) return true;
+        int row = page == PhysicsDetail ? physics_selection.row : physics_list_selection.row - 1;
+        item = (Favourite){.row=row,.equation=true,.chemistry=chemistry_sheet};
     } else if (page == Topics || page == TopicMenu ||
                (page == Reading && (reading_parent == Topics || reading_parent == Favourites ||
                                      reading_parent == TopicMenu || reading_parent == PhysicsDetail))) {
@@ -1016,20 +1359,22 @@ static bool pin_current(void) {
             (item.equation ? saved->chemistry != item.chemistry :
              saved->course != item.course || saved->chapter != item.chapter)) continue;
         memmove(saved,saved+1,(size_t)(--favourite_count-i)*sizeof(*saved));
-        if (favourite_selection.row >= favourite_count)
-            favourite_selection.row = favourite_count ? favourite_count-1 : 0;
+        if (page == Favourites) {
+            int count = count_for(page);
+            if (favourite_selection.row >= count) favourite_selection.row = count ? count - 1 : 0;
+        }
         pin_notice = "Removed from Favourites";
         return true;
     }
     if (favourite_count < FAVOURITE_LIMIT) {
         favourites[favourite_count++] = item;
-        pin_notice = "Pinned in TOOLBOX > Favourites";
+        pin_notice = item.equation ? "Equation added to Favourites" : "Topic added to Favourites";
     } else pin_notice = "Favourites list is full";
     return true;
 }
 
 static void open_favourite(void) {
-    Favourite item = favourites[favourite_selection.row];
+    Favourite item = favourites[favourite_index(favourite_selection.row)];
     if (item.equation) {
         favourite_origin = true;
         chemistry_sheet = item.chemistry;
@@ -1070,10 +1415,12 @@ static void open_tool(ExtraTool selection) {
             set_field(&forms[2],degrees ? "360" : "2pi",true);
         }
     }
+    tool_parent = CasMenu;
     page = ToolForm;
 }
 
 static void submit_tool(void) {
+    for (int i = 0; i < field_count; i++) finish_parentheses(&forms[i]);
     if (extra_tool == TrigSolver)
         cas_trig_equation(forms[0].text,forms[1].text,forms[2].text,degrees,&tool_solution);
     else if (extra_tool == PhysicsRearrange)
@@ -1083,6 +1430,12 @@ static void submit_tool(void) {
         for (int i = 0; i < 6; i++) inputs[i] = forms[i].text;
         solve_triangle(inputs,degrees,&tool_solution);
     }
+    record(history, &history_count, HISTORY_LIMIT,
+           extra_tool == TriangleSolver ? extra_tool_names[extra_tool] : forms[0].text,
+           Calculate, extra_tool_names[extra_tool], &tool_solution);
+    capture_form_reuse(ReuseExtra, extra_tool);
+    record_form_inputs();
+    session_autosave();
     tool_offset = 0;
     page = ToolOutput;
 }
@@ -1126,7 +1479,11 @@ static const char cas_help[] =
 
 static void back(void) {
     switch (page) {
-        case Toolbox: case CasMenu: page = Prompt; break;
+        case Toolbox: page = toolbox_parent; break;
+        case CasMenu: page = cas_parent; break;
+        case GeneralMenu: page = general_parent; general_active = false; break;
+        case About: case SessionName: case SessionList: page = GeneralMenu; break;
+        case EquationFavourites: page = CasMenu; break;
         case Chapters: page = Toolbox; break;
         case Topics: page = Chapters; break;
         case TopicMenu:
@@ -1136,7 +1493,7 @@ static void back(void) {
         case Examples: page = TopicMenu; break;
         case PhysicsList: page = CasMenu; break;
         case PhysicsDetail:
-            page = favourite_origin ? Favourites : PhysicsList;
+            page = favourite_origin ? Favourites : equation_parent;
             favourite_origin = false;
             break;
         case PhysicsSubjects: page = PhysicsDetail; break;
@@ -1152,16 +1509,29 @@ static void back(void) {
         case UnitResult: page = UnitValue; break;
         case Form: page = form_parent; break;
         case Result: page = result_parent; break;
-        case Settings: page = settings_parent; break;
+        case Settings: page = GeneralMenu; break;
         case DecimalPlaces: page = Settings; break;
-        case Favourites: page = Toolbox; break;
-        case ToolForm: page = CasMenu; break;
+        case Favourites: page = favourite_parent; break;
+        case ToolForm: page = tool_parent; break;
         case ToolOutput: page = ToolForm; break;
         case CalcHistory: page = Prompt; break;
         case CalcExtras: page = CalcHistory; break;
-        case Shortcuts: page = Settings; break;
-        case History: page = CasMenu; break;
+        case Shortcuts: case History: page = GeneralMenu; break;
+        case HistoryResult: page = History; break;
         case Reading: page = reading_parent; break;
+        case Search: page = search_parent; break;
+        case RelatedEquations:
+            page = related_parent;
+            if (page == Reading) {
+                read_content = related_read_content;
+                read_title = related_read_title;
+                reading_parent = related_reading_parent;
+                read_offset = related_read_offset;
+                course_selection = (Selection){related_topic.course,0};
+                chapter_selection = (Selection){related_topic.chapter,0};
+                topic_selection = (Selection){related_topic.row,0};
+            }
+            break;
         default: break;
     }
 }
@@ -1169,11 +1539,12 @@ static void back(void) {
 static void choose(void) {
     switch (page) {
         case Toolbox:
-            if (course_selection.row == course_count) {
-                favourite_selection = (Selection){0};
-                page = Favourites;
+            if (course_list_selection.row == course_count + 1) { begin_search(false); break; }
+            if (!course_list_selection.row) {
+                open_favourites(CoursePins, Toolbox);
                 break;
             }
+            course_selection = (Selection){course_list_selection.row - 1, 0};
             chapter_selection = (Selection){0};
             page = Chapters;
             break;
@@ -1212,29 +1583,66 @@ static void choose(void) {
             }
             break;
         }
+        case GeneralMenu:
+            switch (general_selection.row) {
+                case MenuCourses:
+                    if (general_parent == Toolbox) general_parent = toolbox_parent;
+                    toolbox_parent = GeneralMenu;
+                    course_list_selection = (Selection){0};
+                    page = Toolbox;
+                    break;
+                case MenuEquations:
+                    if (general_parent == CasMenu) general_parent = cas_parent;
+                    cas_parent = GeneralMenu;
+                    cas_selection = (Selection){0};
+                    page = CasMenu;
+                    break;
+                case MenuNewSession: session_name = (Field){0}; session_error = NULL; page = SessionName; break;
+                case MenuOpenSession: session_selection = (Selection){active_session,0}; page = SessionList; break;
+                case MenuHistory: history_selection = (Selection){0}; page = History; break;
+                case MenuShortcuts: shortcuts_offset = 0; page = Shortcuts; break;
+                case MenuPreferences: settings_selection = (Selection){0}; page = Settings; break;
+                case MenuAbout: page = About; break;
+            }
+            break;
+        case SessionList:
+            if (open_session(session_selection.row)) {
+                general_active = false;
+                session_autosave();
+            }
+            break;
         case CasMenu:
-            if (cas_selection.row < 2) {
-                chemistry_sheet = cas_selection.row == 1;
-                favourite_origin = false;
-                physics_selection = (Selection){0};
-                page = PhysicsList;
-            } else if (cas_selection.row == 2) {
-                unit_group = (Selection){0};
-                set_field(&unit_input, "", false);
-                page = UnitGroups;
-            } else if (cas_selection.row == CAS_TOOL_COUNT + OperationCount) {
-                history_selection = (Selection){0};
-                page = History;
-            } else if (cas_selection.row < CAS_TOOL_COUNT + OperationCount)
-                form_for((Operation)(cas_selection.row - CAS_TOOL_COUNT),NULL,CasMenu);
-            else open_tool((ExtraTool)(cas_selection.row-CAS_TOOL_COUNT-OperationCount-1));
+            switch (cas_selection.row) {
+                case CasFavourites: equation_favourite_selection = (Selection){0}; page = EquationFavourites; break;
+                case CasSearch: begin_search(true); break;
+                case CasPhysics: case CasChemistry:
+                    chemistry_sheet = cas_selection.row == CasChemistry;
+                    favourite_origin = equation_from_related = false;
+                    equation_parent = PhysicsList;
+                    physics_list_selection = (Selection){0};
+                    page = PhysicsList;
+                    break;
+                case CasUnits:
+                    unit_group = (Selection){0};
+                    set_field(&unit_input, "", false);
+                    page = UnitGroups;
+                    break;
+                case CasRearrange: open_tool(PhysicsRearrange); break;
+                case CasTrig: open_tool(TrigSolver); break;
+                case CasTriangle: open_tool(TriangleSolver); break;
+                default: form_for(cas_menu_operation(cas_selection.row), NULL, CasMenu); break;
+            }
+            break;
+        case EquationFavourites:
+            open_favourites(equation_favourite_selection.row == 0 ? PhysicsPins : ChemistryPins, EquationFavourites);
             break;
         case Favourites:
-            if (favourite_count) open_favourite();
+            if (favourite_index(favourite_selection.row) >= 0) open_favourite();
             break;
         case DecimalPlaces:
             decimal_places = decimal_selection.row;
-            if (settings_parent == CalcExtras) prepare_calc_extras();
+            session_autosave();
+            if (general_parent == CalcExtras && calc_count) prepare_calc_extras();
             page = Settings;
             break;
         case UnitGroups:
@@ -1249,8 +1657,18 @@ static void choose(void) {
             unit_input_error = false;
             page = UnitValue;
             break;
+        case RelatedEquations:
+            open_search_match(&related_matches[related_selection.row]);
+            break;
         case PhysicsList:
-            open_equation();
+            if (physics_list_selection.row == count_for(PhysicsList) - 1) begin_search(true);
+            else if (!physics_list_selection.row) open_favourites(chemistry_sheet ? ChemistryPins : PhysicsPins, PhysicsList);
+            else {
+                physics_selection = (Selection){physics_list_selection.row - 1, 0};
+                equation_parent = PhysicsList;
+                equation_from_related = false;
+                open_equation();
+            }
             break;
         case PhysicsSubjects:
             physics_focus = physics_first = 0;
@@ -1259,21 +1677,17 @@ static void choose(void) {
             break;
         case History:
             if (history_count) {
-                const HistoryEntry *item = &history[history_selection.row];
-                solution = item->solution;
-                show_result(item->question, item->operation, History, false);
+                history_offset = 0;
+                page = HistoryResult;
             }
             break;
         case Settings:
             if (settings_selection.row == 0) degrees = !degrees;
             if (settings_selection.row == 1) decimal = !decimal;
             if (settings_selection.row == 2) show_steps = !show_steps;
-            if (settings_selection.row == 3) {
-                shortcuts_offset = 0;
-                page = Shortcuts;
-            }
-            if (settings_selection.row == 4) begin_read("CAS help", cas_help);
-            if (settings_selection.row == 5) {
+            if (settings_selection.row < 3) session_autosave();
+            if (settings_selection.row == 3) begin_read("CAS help", cas_help);
+            if (settings_selection.row == 4) {
                 decimal_selection = (Selection){decimal_places,0};
                 page = DecimalPlaces;
             }
@@ -1387,6 +1801,7 @@ static void edit(Field *field, int key, bool shifted, bool alphabetic, char lett
 }
 
 static void submit_conversion(void) {
+    finish_parentheses(&unit_input);
     double value, result;
     const Unit *units = selected_unit_group()->units;
     const Unit *from = &units[unit_from.row], *to = &units[unit_to.row];
@@ -1396,6 +1811,14 @@ static void submit_conversion(void) {
     snprintf(unit_expression, sizeof(unit_expression), "%.12g %s", value, from->symbol);
     unit_working(unit_work, sizeof(unit_work), value, from, to, result);
     unit_copied = false;
+    Solution converted = {.ok = true};
+    snprintf(converted.steps, sizeof(converted.steps), "%s", unit_work);
+    snprintf(converted.answer, sizeof(converted.answer), "%s %s", unit_number, to->symbol);
+    record(history, &history_count, HISTORY_LIMIT, unit_expression, Calculate, "Unit conversions", &converted);
+    history[0].reuse = (ReuseData){.kind=ReuseUnit,.id=unit_group.row,.subject=unit_from.row,
+                                 .topic=unit_to.row,.count=1,.degrees=degrees};
+    snprintf(history[0].reuse.inputs[0], EXPRESSION_SIZE, "%s", unit_input.text);
+    session_autosave();
     page = UnitResult;
 }
 
@@ -1447,21 +1870,125 @@ static void handle_calculation_history(int key,bool copy) {
     }
 }
 
+static void create_session(void) {
+    const char *name = session_name.text;
+    size_t length = strlen(name);
+    if (!valid_session_name(name, length)) {
+        session_error = "Use 1 to 23 letters, digits or _.";
+        return;
+    }
+    for (int i = 0; i < session_count; i++) {
+        if (!strcmp(session_names[i], name)) {
+            session_error = "That session already exists.";
+            return;
+        }
+    }
+    if (session_count == SESSION_LIMIT) {
+        session_error = "The four session slots are full.";
+        return;
+    }
+    if (!session_store.records) {
+        session_error = "Python storage is unavailable.";
+        return;
+    }
+    if (session_dirty && !save_active_session()) {
+        session_error = "Save current session before switching.";
+        return;
+    }
+    {
+        char file[SESSION_NAME_SIZE + 11];
+        session_filename(file, name);
+        size_t position = 0;
+        ScriptRecord record;
+        while (script_record_next(session_store, &position, &record)) {
+            if (strcmp(record.name, file)) continue;
+            session_error = "That Python script already exists.";
+            return;
+        }
+        if (sizeof(session_script) + strlen(file) + 6 > session_store.capacity - position) {
+            session_error = "Python storage is full.";
+            return;
+        }
+    }
+    memcpy(session_names[session_count], name, length + 1);
+    if (!open_session(session_count)) return;
+    session_count++;
+    general_active = false;
+    session_autosave();
+}
+
 static bool handle_key(int key, bool shifted, bool alphabetic) {
     pin_notice = NULL;
+    if (key == eadk_key_ans && alphabetic) {
+        if (session_dirty) session_autosave();
+        page = Prompt;
+        general_active = false;
+        shift = false;
+        alpha = AlphaOff;
+        favourite_origin = equation_from_related = false;
+        return true;
+    }
     if (key == eadk_key_xnt && alphabetic) return true;
     if (key == eadk_key_exe && shifted) {
-        if (page == Settings || page == Shortcuts || page == DecimalPlaces ||
-            (page == Reading && reading_parent == Settings)) page = settings_parent;
-        else {
-            settings_parent = page;
-            settings_selection = (Selection){0};
-            page = Settings;
+        if (general_active) {
+            page = general_parent;
+            general_active = false;
+        } else {
+            general_parent = page;
+            general_active = true;
+            general_selection = (Selection){0};
+            page = GeneralMenu;
         }
         return true;
     }
     char letter = alphabetic ? alpha_character(key, shifted) : '\0';
     bool function = shifted && !alphabetic;
+    if (page == Search) {
+        if (key == eadk_key_back) back();
+        else if (key == eadk_key_up && search_selection.row > 0) search_selection.row--;
+        else if (key == eadk_key_down && search_selection.row + 1 < search_count) search_selection.row++;
+        else if (key == eadk_key_ok || key == eadk_key_exe) {
+            if (search_count) open_search_match(&search_matches[search_selection.row]);
+        } else if (key != eadk_key_up && key != eadk_key_down) {
+            edit(&search_query, key, shifted, alphabetic, letter);
+            refresh_search();
+        }
+        return true;
+    }
+    if (key == eadk_key_var && !function && !alphabetic && reading_is_topic()) {
+        find_related();
+        if (related_count) {
+            related_parent = page;
+            related_read_content = read_content;
+            related_read_title = read_title;
+            related_reading_parent = reading_parent;
+            related_read_offset = read_offset;
+            related_topic = (SearchMatch){course_selection.row,chapter_selection.row,topic_selection.row,false,false};
+            related_selection = (Selection){0};
+            page = RelatedEquations;
+            if (related_count == 1) open_search_match(&related_matches[0]);
+        } else pin_notice = "No related equation sheet entries.";
+        return true;
+    }
+    if (!function && !alphabetic &&
+        ((key == eadk_key_toolbox && page == Toolbox) ||
+         (key == eadk_key_var && (page == CasMenu || page == PhysicsList)))) {
+        begin_search(page != Toolbox);
+        return true;
+    }
+    if (page == HistoryResult && (key == eadk_key_exe || key == eadk_key_ok)) {
+        reuse_history();
+        return true;
+    }
+    if (page == SessionName) {
+        if (key == eadk_key_back) back();
+        else if (key == eadk_key_exe || key == eadk_key_ok) create_session();
+        else {
+            session_error = NULL;
+            edit(&session_name, key, shifted, alphabetic, letter);
+        }
+        return true;
+    }
     if (function && key == eadk_key_var && pin_current()) return true;
     if (page == CalcHistory && function && key == eadk_key_var) {
         handle_calculation_history(key,true);
@@ -1497,8 +2024,17 @@ static bool handle_key(int key, bool shifted, bool alphabetic) {
     if ((key == eadk_key_toolbox || key == eadk_key_var) &&
         (page == Prompt || page == Result || page == Toolbox || page == CasMenu || page == CalcHistory)) {
         Page target = key == eadk_key_toolbox ? Toolbox : CasMenu;
-        if (target == CasMenu && page != CasMenu) cas_selection = (Selection){0};
-        page = page == target ? Prompt : target;
+        if (page == target) back();
+        else {
+            if (target == CasMenu) {
+                cas_selection = (Selection){0};
+                cas_parent = Prompt;
+            } else {
+                course_list_selection = (Selection){0};
+                toolbox_parent = Prompt;
+            }
+            page = target;
+        }
         return true;
     }
     if (page == CalcHistory) {
@@ -1541,9 +2077,25 @@ static bool handle_key(int key, bool shifted, bool alphabetic) {
         else if (key == eadk_key_down && physics_focus + 1 < count) physics_focus++;
         else if (key == eadk_key_exe || key == eadk_key_ok) {
             const char *values[SCIENCE_VARIABLES] = {0};
-            for (int i = 0; i < count; i++) values[physics_slot(i)] = physics_fields[physics_slot(i)].text;
+            for (int i = 0; i < count; i++) {
+                int slot = physics_slot(i);
+                finish_parentheses(&physics_fields[slot]);
+                values[slot] = physics_fields[slot].text;
+            }
             physics_answer_ok = physics_solve(equation(), science_subject(physics_subject.row), values, &science_work);
-            if (*science_work.substituted && (chemistry_sheet || *science_work.conversions)) {
+            Solution worked = {.ok = physics_answer_ok};
+            snprintf(worked.steps, sizeof(worked.steps), "%.150s\n%.150s\n%.195s",
+                     science_work.conversions, science_work.steps, science_work.substituted);
+            snprintf(worked.answer, sizeof(worked.answer), "%s", science_work.answer);
+            record(history, &history_count, HISTORY_LIMIT, equation()->title, Calculate, equation()->title, &worked);
+            ReuseData *reuse = &history[0].reuse;
+            *reuse = (ReuseData){.kind=ReuseScience,.id=physics_selection.row,
+                                .subject=physics_subject.row,.course=chemistry_sheet,
+                                .count=equation()->count,.degrees=degrees};
+            for (int i = 0; i < equation()->count; i++)
+                memcpy(reuse->inputs[i], physics_fields[i].text, EXPRESSION_SIZE);
+            session_autosave();
+            if (*science_work.substituted) {
                 science_result_offset = 0;
                 page = ScienceResult;
             }
@@ -1575,8 +2127,11 @@ static bool handle_key(int key, bool shifted, bool alphabetic) {
             edit(&forms[active_field],key,shifted,alphabetic,letter);
         return true;
     }
-    if (page == ToolOutput) {
-        if (key == eadk_key_up || key == eadk_key_down) tool_offset += key == eadk_key_up ? -1 : 1;
+    if (page == ToolOutput || page == HistoryResult) {
+        if (key == eadk_key_up || key == eadk_key_down) {
+            int *offset = page == ToolOutput ? &tool_offset : &history_offset;
+            *offset += key == eadk_key_up ? -1 : 1;
+        }
         return true;
     }
     if (page == Reading || page == Result) {
@@ -1608,6 +2163,7 @@ static bool repeats(int key) {
 }
 
 int main(void) {
+    load_sessions();
     eadk_keyboard_state_t previous = eadk_keyboard_scan();
     const uint64_t shift_bit = UINT64_C(1) << eadk_key_shift;
     const uint64_t alpha_bit = UINT64_C(1) << eadk_key_alpha;

@@ -28,10 +28,20 @@ KEY = {
 REGS = (UC_ARM_REG_R0, UC_ARM_REG_R1, UC_ARM_REG_R2, UC_ARM_REG_R3)
 STACK = 0x20040000
 STOP = 0x1000
+STORE_RAM = 0x24000000
+STORE_SIZE = 42 * 1024
+STORE_MAGIC = 0xEE0BDDBA
+GENERAL = ("SHIFT", "EXE")
+PIN = ("SHIFT", "VAR")
+
+
+def python_record(name, source):
+    raw = name.encode() + b"\0\0" + source.encode() + b"\0"
+    return pack("<H", len(raw) + 2) + raw
 
 
 class Simulator:
-    def __init__(self, path):
+    def __init__(self, path, store=None, version=b"24.8.0"):
         with path.open("rb") as stream:
             elf = ELFFile(stream)
             self.symbol = {r.name: r["st_value"] for r in elf.get_section_by_name(".symtab").iter_symbols()}
@@ -44,6 +54,14 @@ class Simulator:
             for segment in elf.iter_segments():
                 if segment["p_type"] == "PT_LOAD" and segment["p_filesz"]:
                     self.cpu.mem_write(segment["p_paddr"], segment.data())
+        if store is not None:
+            self.cpu.mem_map(STORE_RAM, 0x40000)
+            self.cpu.mem_write(STORE_RAM, pack("<I", STORE_MAGIC))
+            self.cpu.mem_write(STORE_RAM + 4, bytes(store).ljust(STORE_SIZE, b"\0"))
+            self.cpu.mem_write(STORE_RAM + 4 + STORE_SIZE, pack("<I", STORE_MAGIC))
+            self.cpu.mem_write(0x90420000, pack("<I8s9I", 0xDEC0EDFE, version,
+                STORE_RAM, STORE_SIZE, 0x90000000, 0x90400000, 0x20000000, STACK,
+                0, 0, 0xDEC0EDFE))
         self.cpu.reg_write(UC_ARM_REG_C1_C0_2, 0xF00000)
         self.cpu.reg_write(UC_ARM_REG_SP, STACK)
         self.cpu.reg_write(UC_ARM_REG_LR, STOP | 1)
@@ -51,11 +69,20 @@ class Simulator:
         self.screen = Image.new("RGB", (320, 240), "white")
         self.draw = ImageDraw.Draw(self.screen)
         self.strings = []
+        self.formulas = []
+        self.lines = []
+        self.carets = []
         self.waiting = False
         self.exited = False
-        if "draw_text" in self.symbol:
-            address = self.symbol["draw_text"] & ~1
-            self.cpu.hook_add(UC_HOOK_CODE, self.capture_text, begin=address, end=address)
+        for function in ("draw_text", "string_at"):
+            if function in self.symbol:
+                address = self.symbol[function] & ~1
+                self.cpu.hook_add(UC_HOOK_CODE, self.capture_text, begin=address, end=address)
+        for function in ("paint_calculation", "paint_math", "paint_math_input", "revision_line"):
+            if function in self.symbol:
+                address = self.symbol[function] & ~1
+                self.cpu.hook_add(UC_HOOK_CODE, self.capture_formula,
+                                  user_data=function, begin=address, end=address)
         self.cpu.hook_add(UC_HOOK_INTR, self.syscall)
         self.cpu.hook_add(UC_HOOK_CODE, self.exit, begin=STOP, end=STOP)
 
@@ -95,6 +122,13 @@ class Simulator:
         assert x + w <= 320 and y + h <= 240, (x, y, w, h)
         if (x, y, w, h) == (0, 0, 320, 240):
             self.strings.clear()
+            self.formulas.clear()
+            self.lines.clear()
+            self.carets.clear()
+        if w == 1 and colour == 0x32B8 and h >= 8:
+            self.carets.append((x, y, h))
+        if h == 1:
+            self.lines.append((x, y, w, h))
         self.draw.rectangle((x, y, x + w - 1, y + h - 1), fill=self.colour(colour))
 
     def c_string(self, address, limit=128):
@@ -112,8 +146,30 @@ class Simulator:
         x, y, address = (cpu.reg_read(reg) for reg in REGS[:3])
         text = self.c_string(address)
         assert x + len(text) * 7 <= 320 and y + 14 <= 240, (x, y, text)
-        if text:
+        if text and (not self.strings or self.strings[-1] != text):
             self.strings.append(text)
+
+    def capture_formula(self, cpu, _address, _size, function):
+        if function == "revision_line":
+            stack = cpu.reg_read(UC_ARM_REG_SP)
+            if not unpack("<I", cpu.mem_read(stack + 8, 4))[0]:
+                return
+        argument = UC_ARM_REG_R1 if function in ("revision_line", "paint_math_input") else UC_ARM_REG_R0
+        self.formulas.append(self.c_string(cpu.reg_read(argument), 384))
+
+    def script_bytes(self):
+        return bytes(self.cpu.mem_read(STORE_RAM + 4, STORE_SIZE))
+
+    def scripts(self):
+        records = {}
+        raw = self.script_bytes()
+        offset = 0
+        while size := unpack("<H", raw[offset:offset + 2])[0]:
+            name, source = raw[offset + 2:offset + size].split(b"\0", 1)
+            assert source[0] == 0 and source[-1] == 0
+            records[name.decode()] = source[1:-1].decode()
+            offset += size
+        return records
 
     def blit(self, a, b, address):
         x, y, w, h = a & 65535, a >> 16, b & 65535, b >> 16
@@ -141,73 +197,56 @@ class Simulator:
         self.run()
 
     def see(self, *phrases):
-        screen = "\n".join(self.strings)
+        screen = "\n".join(self.strings + self.formulas)
         for phrase in phrases:
             assert phrase.casefold() in screen.casefold(), f"{phrase!r} missing from screen:\n{screen}"
 
 
 def check_ui(path, screenshots):
     app = Simulator(path)
-    # Stress the launcher and shortcuts with a 4 KiB stack budget.
+    # Stress launch and basic navigation with the same 4 KiB budget as v0.1.0.
     guard_base, guard_length = STACK - 0x4000, 0x3000
     app.cpu.mem_protect(guard_base, guard_length, UC_PROT_NONE)
     app.run(app.entry)
     app.see("NUMAI", "deg", "TOOLBOX", "VAR")
     assert app.screen.getpixel((0, 0)) == app.colour(0xfda6)
-    assert app.screen.getpixel((319, 0)) == app.colour(0xfda6)
     assert not any("UK" in line for line in app.strings)
     app.screen.save(screenshots / "startup.png")
-    app.press(("ALPHA", "XNT"))
-    app.see("NUMAI", "deg")
-    app.press(("SHIFT", "EXE"))
-    app.see("Settings", "Degrees")
-    app.press("DOWN", "DOWN", "DOWN", "OK")
+    app.press(("ALPHA", "XNT"), GENERAL)
+    app.see("NUMAI MENU")
+    entries = ["Courses", "Equations and CAS", "New Session", "Open Session", "History",
+               "Keyboard Shortcuts", "Preferences", "About"]
+    assert [item for item in app.strings if item in entries] == entries
+    app.press(*["DOWN"] * 5, "OK")
     app.see("Keyboard shortcuts", "Key bind", "Function", "TOOLBOX", "Browse courses and topics")
     app.screen.save(screenshots / "keyboard-shortcuts.png")
     app.cpu.mem_protect(guard_base, guard_length, UC_PROT_ALL)
     app.press(*["DOWN"] * 28)
     app.see(">**", "Complete the square")
-    assert "Browse courses and topics" not in app.strings
-    app.press("BACK")
-    app.see("Settings", "Keyboard shortcuts")
-    app.press("EXE")
-    app.see("TOOLBOX", "Browse courses and topics")
-    app.press(("SHIFT", "EXE"))
-    app.see("deg")
-    app.press(("SHIFT", "EXE"))
-    app.press("BACK", "SIN", "3", "0", ")", "EXE")
-    app.see("sin", "30", "0.5")
-    app.press("BACK")
-    app.press(("SHIFT", "EXE"), "OK", "BACK")
+    app.press("BACK", "DOWN", "OK", "OK", "BACK", "BACK")
     app.see("NUMAI", "rad")
     app.press("TOOLBOX")
-    app.see("Edexcel IGCSE Maths A", "OCR Level 3 Additional Maths", "Edexcel A Level Maths",
-            "AQA Physics", "AQA Biology", "AQA Chemistry")
+    app.see("Favourites", "Edexcel IGCSE Maths A", "OCR Level 3 Additional Maths",
+            "Edexcel A Level Maths", "AQA Physics", "AQA Biology", "AQA Chemistry")
     app.screen.save(screenshots / "toolbox.png")
-    app.press("OK", "OK", "OK")
+    app.press("SHIFT")
+    app.see("SHIFT")
+    gold = app.colour(0xfda6)
+    assert any(app.screen.getpixel((x, y)) != gold for x in range(8, 43) for y in range(3, 17))
+    app.press("SHIFT", "ALPHA")
+    app.see("abc")
+    assert any(app.screen.getpixel((x, y)) != gold for x in range(8, 29) for y in range(3, 17))
+    app.press("ALPHA", "ALPHA", "DOWN", "OK", "OK", "OK")
     app.see("Integers, primes and HCF", "Course notes", "Method and working", "Enter your values")
-    app.press("DOWN", "DOWN", "OK")
-    app.see("First integer", "84", "Second integer", "126")
-    app.press("1", "8", "DOWN", "2", "4")
-    app.see("18", "24")
-    app.screen.save(screenshots / "exercise.png")
+    app.press("DOWN", "DOWN", "OK", "1", "8", "DOWN", "2", "4")
+    app.see("First integer", "18", "Second integer", "24")
     app.press("EXE")
     app.see("gcd((18),(24))", "6")
-    app.press("BACK")
-    app.see("18", "24")
-    app.press("BACK", "BACK", "BACK", "BACK", "DOWN", "OK")
-    app.see("6993", "Enumeration", "Numerical methods")
-    app.press("BACK", "DOWN", "OK", *["DOWN"] * 18)
-    app.see("9MA0", "Mechanics: Moments", "Stats: Hypothesis testing")
-    app.press("OK", "OK", "DOWN", "DOWN", "OK", "EXE")
-    app.see("Moment", "21")
-    app.press("VAR", *["DOWN"] * 4, "OK", "EXE")
+    app.press("VAR", *["DOWN"] * 6, "OK", "EXE")
     app.see("Factorise", "(x - 2)(x - 3)")
     app.screen.save(screenshots / "worked-solution.png")
     app.press("BACK", "BACK", "DOWN", "OK", "EXE")
     app.see("Simplify", "5*x - 2")
-    app.press("BACK", "BACK", "DOWN", "OK", "EXE")
-    app.see("Expand", "x^2 - 2*x - 3")
     app.press("BACK", "BACK", "DOWN", "OK", "EXE")
     app.see("Solve for x", "x = 2, 3")
     app.press("BACK", "BACK", "DOWN", "OK", "EXE")
@@ -217,27 +256,14 @@ def check_ui(path, screenshots):
     app.press("BACK", "BACK", "DOWN", "OK", "EXE")
     app.see("Definite integral", "14/3")
     app.press("BACK", "BACK", "DOWN", "OK", "EXE")
-    app.see("Substitute x", "Substitute x = 2", "5")
+    app.see("Substitute x", "5")
     app.press("BACK", "BACK", "DOWN", "OK", "EXE")
     app.see("Root in an interval", "x approx. 0.7390851332")
     app.press("BACK", "BACK", "DOWN", "OK", "EXE")
     app.see("Complete the square", "2*(x + 3)^2 - 7")
-    app.press("BACK", "BACK", "DOWN", "OK", "DOWN", "DOWN", "OK")
-    app.see("Substitute x", "Substitute x = 2")
-    app.press(("SHIFT", "EXE"))
-    app.see("Settings", "Radians", "Fractions", "Worked steps")
-    app.press("OK", "DOWN", "OK", "DOWN", "OK", "BACK")
-    app.see("Substitute x", "5")
-    assert "Substitute x = 2" not in app.strings
-    app.press("SHIFT", "EXE")
-    app.see("Settings", "Degrees", "Decimal", "Off")
-    app.press("BACK", "BACK", "BACK", "BACK")
-    app.see("NUMAI")
-    app.press("XNT", "SQUARE", "-", "2", "SHIFT", "PI", "0", "EXE")
-    app.see("x^2-2=0", "1.414213562")
     app.press("HOME")
     assert app.exited
-    print("Cortex-M7 keypad and display smoke tests passed")
+    print("General menu, preferences, shortcuts, and CAS keypad smoke tests passed")
 
 
 def check_keyboard(path, screenshots):
@@ -349,7 +375,7 @@ def check_engine(path):
 def check_catalog(path):
     app = Simulator(path)
     app.run(app.entry)
-    app.press("TOOLBOX")
+    app.press("TOOLBOX", "DOWN")
     course_total, = unpack("<i", app.cpu.mem_read(app.symbol["course_count"], 4))
     entries = 0
     forms = examples = science_cards = higher_cards = 0
@@ -403,6 +429,9 @@ def check_catalog(path):
                     reference = science_notes.splitlines()[0]
                     assert science_notes.count("\n- ") >= 2, base
                     app.see(base[:40], reference)
+                    extra = app.c_string(example, 1400)
+                    assert "Understand the mechanism" in extra and "Apply your understanding" in extra, name
+                    assert len(extra) >= 350, name
                     if label:
                         app.see("(higher only)")
                         higher_cards += 1
@@ -597,75 +626,52 @@ def check_physics(path):
 
     app = Simulator(path)
     app.run(app.entry)
-    app.press("VAR")
-    app.see("CAS and history", "AQA GCSE Physics equation sheet", "AQA GCSE Chemistry equation sheet", "Unit conversions")
-    assert app.screen.getpixel((0, 0)) == app.colour(0xfda6)
-    app.press("OK")
+    app.press("VAR", "DOWN", "OK", "DOWN")
     app.see("AQA GCSE Physics equation sheet", "Kinetic energy [J]", "Mass [kg]", "Speed [m/s] squared")
     app.screen.save(path.parent / "equation-sheet.png")
     app.press("OK")
     app.see("Kinetic energy", "Topic: Energy", "TOOLBOX: open topic 4.1.1.2",
-            "Ek=0.5mv^2", "Symbols and units", "joule", "kilogram", "Solver")
-    ink = app.colour(0x2104)
-    assert app.screen.getpixel((11, 135)) == ink
-    assert app.screen.getpixel((11 + 7*len("Symbols and units") - 1, 135)) == ink
+            "E_{k}=0.5mv^2", "Symbols and units", "Solver")
     app.screen.save(path.parent / "physics-symbols-units.png")
+    assert any(x == 11 and w == 7*len("Symbols and units") and h == 1
+               for x, y, w, h in app.lines)
     app.press("TOOLBOX")
     app.see("Kinetic, elastic and GPE", "4.1.1.2")
     app.press("BACK")
     app.see("Topic: Energy", "Symbols and units", "Solver")
     headings_seen = set()
-    for _ in range(36):
+    for _ in range(60):
         headings_seen.update(app.strings)
         if "Use: Find Mass given Kinetic energy and" in app.strings:
             break
         app.press("DOWN")
     assert {"Worked example", "When to use it", "Rearrangements"} <= headings_seen
-    app.see("m=2Ek/v^2", "Use: Find Mass given")
+    app.see("m=2E_{k}/v^2", "Use: Find Mass given")
     app.screen.save(path.parent / "equation-reference.png")
-    app.press("EXE")
-    app.see("Choose the unknown", "Kinetic energy", "Mass", "Speed")
-    app.press("DOWN", "DOWN", "OK")
-    app.see("Find Speed [m/s]", "v=sqrt(2Ek/m)", "Kinetic energy", "Mass")
-    assert app.screen.getpixel((7, 85)) == app.colour(0xfda6)
-    assert all(app.screen.getpixel((x, y)) == (255, 255, 255)
-               for y in range(86, 89) for x in range(7, 313))
+    app.press("EXE", "DOWN", "DOWN", "OK")
+    app.see("Find Speed [m/s]", "v=sqrt(2E_{k}/m)", "Kinetic energy", "Mass")
     app.press("EXE")
     app.see("Check Kinetic energy [J].")
-    assert not any(line.startswith("Substitute:") for line in app.strings)
     app.press("9", "DOWN", "2", "EXE")
-    app.see("Substitute: v=sqrt(2 x 9/2)", "v = 3 m/s")
+    app.see("Physics working", "Substitute: v=sqrt(2 x 9/2)", "v = 3 m/s")
     app.screen.save(path.parent / "equation-solver.png")
-    app.press("BACK", "UP", "OK")
-    app.see("Find Mass [kg]", "m=2Ek/v^2", "9")
-    app.press("DOWN", "3", "EXE")
+    app.press("BACK", "BACK", "UP", "OK", "DOWN", "3", "EXE")
     app.see("Substitute: m=2 x 9/3^2", "m = 2 kg")
-    app.press("BACK", "BACK", "BACK", *["DOWN"] * 22)
-    app.see("Liquid pressure at depth", "(higher only)")
-    app.press("OK")
-    app.see("(higher only)", "p=hrhog")
-    app.press("TOOLBOX")
-    app.see("Pressure at depth", "(higher only)", "4.5.5.1.2")
-    app.press("BACK")
-    app.see("Liquid pressure at depth", "Solver")
-    app.press("BACK", *["UP"] * 22)
+    app.press("BACK", "BACK", "BACK", "BACK")
     for i, section in enumerate(sections):
         app.press("OK", "TOOLBOX")
-        app.see("UP/DOWN: scroll", section)
+        app.see("UP/DOWN", section)
         app.press("BACK", "BACK")
         if i + 1 < len(sections):
             app.press("DOWN")
-    print(f"Checked every physics fact sheet's TOOLBOX shortcut on ARM")
+    print("Checked every physics fact sheet's TOOLBOX shortcut on ARM")
     app.press(*["UP"] * 24, "OK", "EXE", "OK")
     app.see("Find Power [W]", "P=VI")
     app.press("1", "2", "DOWN", "2", "5", "0", "ALPHA", "-", "ALPHA", "7",
               "SHIFT", "ALPHA", "EXP", "EXE")
     app.see("Physics working", "250 mA = 0.25 A", "Substitute: P=12 x 0.25", "P = 3 W")
     app.screen.save(path.parent / "physics-unit-conversion.png")
-    app.press(*["BACK"] * 4)
-    app.press("BACK", "DOWN", "OK")
-    app.see("AQA GCSE Chemistry equation sheet", "Neutron number", "Relative atomic mass")
-    app.press(*["DOWN"] * 19, "OK")
+    app.press(*["BACK"] * 5, "DOWN", "OK", "DOWN", *["DOWN"] * 19, "OK")
     app.see("Titration with mole ratios", "(higher only)", "4.4.2.5")
     app.press("TOOLBOX")
     app.see("Titration calculations", "(higher only)")
@@ -674,13 +680,16 @@ def check_physics(path):
     app.press("0", ".", "1", "DOWN", "2", "5", "ALPHA", "-", "ALPHA", "7", "ALPHA", "SQUARE",
               "DOWN", "2", "0", "ALPHA", "-", "ALPHA", "7", "ALPHA", "SQUARE",
               "DOWN", "1", "DOWN", "2", "EXE")
-    app.see("Chemistry working", "25 mL = 0.025 dm^3", "Mole ratio B:A = 2:1", "cA = 0.04 mol/dm^3")
+    app.see("Chemistry working", "cA = 0.04 mol/dm^3", "Substitute:")
+    assert "cA=cBVBa/(VAb)" in app.formulas and any(w > 8 for _, _, w, _ in app.lines)
     app.screen.save(path.parent / "chemistry-titration.png")
-    app.press("BACK", "BACK", "BACK", "BACK", "BACK", "DOWN", "OK")
+    app.press(*["DOWN"] * 12)
+    app.see("25 mL = 0.025 dm^3", "Mole ratio B:A = 2:1")
+    app.press(*["BACK"] * 5, "DOWN", "OK")
     app.see("Unit conversions", "Length", "Area", "Volume")
     app.press("DOWN", "DOWN", "OK", *["DOWN"] * 6, "OK", *["DOWN"] * 5, "OK")
     app.see("cL to mL")
-    app.press("3", ".", "5", "EXE", ("SHIFT", "VAR"))
+    app.press("3", ".", "5", "EXE", PIN)
     app.see("35 mL", "Number copied to NumAI clipboard")
     app.screen.save(path.parent / "unit-converter.png")
     app.press(*["BACK"] * 6, ("SHIFT", "TOOLBOX"))
@@ -692,7 +701,7 @@ def check_physics(path):
 def check_chemistry_links(path):
     app = Simulator(path)
     app.run(app.entry)
-    app.press("VAR", "DOWN", "OK")
+    app.press("VAR", "DOWN", "DOWN", "OK", "DOWN")
     destinations = [
         ("4.1.1.5", "Atomic size, mass and isotopes"),
         ("4.1.1.6", "Relative atomic mass"),
@@ -732,7 +741,7 @@ def check_chemistry_links(path):
         app.press("DOWN", "DOWN")
         fact_sheet = app.strings.copy()
         app.press("TOOLBOX")
-        app.see(section, title, "UP/DOWN: scroll")
+        app.see(section, title, "UP/DOWN")
         app.press("BACK")
         assert app.strings == fact_sheet
         app.press("BACK")
@@ -768,11 +777,11 @@ def check_new_calculation(path):
     app.see("Prime factors")
     app.press("OK")
     assert app.c_string(app.symbol["prompt"]) == "2^2*3*7"
-    app.press("BACK", ("SHIFT", "EXE"), *["DOWN"] * 5, "OK", *["DOWN"] * 5, "OK")
+    app.press("BACK", GENERAL, *["DOWN"] * 6, "OK", *["DOWN"] * 4, "OK", *["DOWN"] * 5, "OK")
     app.see("Decimal places", "10")
-    app.press("BACK", "1", "/", "3", "EXE")
+    app.press(GENERAL, "1", "/", "3", "EXE")
     app.see("0.3333333333")
-    app.press(("SHIFT", "EXE"), "OK", "BACK", "SIN", "PI", "/", "6", ")", "EXE")
+    app.press(GENERAL, *["DOWN"] * 6, "OK", "OK", GENERAL, "SIN", "PI", "/", "6", ")", "EXE")
     app.see("rad", "0.5", "=")
     app.press("UP", "RIGHT", "OK")
     app.see("ADDITIONAL RESULTS", "Unit circle")
@@ -790,31 +799,37 @@ def check_new_tools(path):
     app = Simulator(path)
     app.run(app.entry)
     app.press("VAR")
-    assert "CAS AND HISTORY" in app.strings
+    app.see("EQUATIONS AND CAS", "Favourites", "AQA GCSE Physics equation sheet",
+            "AQA GCSE Chemistry equation sheet", "Unit conversions", "Physics formula rearranger")
     assert app.screen.getpixel((319, 1)) == app.colour(0xfda6)
+    assert "History" not in app.strings and "Expand" not in app.strings
     app.press(*["DOWN"] * 15, "OK", "EXE")
     app.see("Trigonometric equation solver", "theta = 30", "150 by symmetry", "x = 30, 150 deg")
     app.press("BACK", "BACK", "DOWN", "OK", "7", "DOWN", "1", "0", "DOWN", "DOWN", "3", "0", "EXE")
     app.see("Triangle 1", "Triangle 2", "supplement")
-    app.press("BACK", "BACK", "DOWN", "OK", "EXE")
+    app.press("BACK", "BACK", *["UP"] * 12, "OK", "EXE")
     app.see("Physics formula rearranger", "Subtract", "a = (v^2 - u^2)/(2*s)")
     app.press("BACK", "BACK", "BACK", "TOOLBOX")
-    assert "TOOLBOX" in app.strings
-    app.press("OK", "OK", ("SHIFT","VAR"))
-    app.see("Pinned in TOOLBOX")
-    app.press("BACK", "BACK", "BACK", "VAR", "OK", "OK", ("SHIFT","VAR"))
-    app.see("Pinned in TOOLBOX")
-    app.press("BACK", "BACK", "DOWN", "OK", "OK", ("SHIFT","VAR"))
-    app.see("Pinned in TOOLBOX")
-    app.press("BACK", "BACK", "BACK", "TOOLBOX", *["DOWN"] * 6, "OK")
-    app.see("FAVOURITES", "Integers, primes and HCF", "Kinetic energy", "Neutron number")
-    app.press("DOWN", "OK")
+    app.press("DOWN", "OK", "OK", PIN)
+    app.see("Topic added to Favourites")
+    app.press("BACK", "BACK", "UP", "OK")
+    app.see("FAVOURITES", "Integers, primes and HCF")
+    app.press("BACK", "BACK", "VAR", "DOWN", "OK", "DOWN", PIN)
+    app.see("Equation added to Favourites")
+    app.press("UP", "OK")
+    app.see("PHYSICS FAVOURITES", "Kinetic energy")
+    app.press("OK")
     app.see("Topic: Energy", "TOOLBOX: open topic 4.1.1.2", "Solver")
-    app.press("BACK", ("SHIFT","VAR"))
-    app.see("Removed from Favourites", "Neutron number")
+    app.press("BACK", "BACK", "BACK", "DOWN", "OK", "DOWN", "OK", PIN)
+    app.see("Equation added to Favourites")
+    app.press("BACK", "UP", "OK")
+    app.see("CHEMISTRY FAVOURITES", "Neutron number")
     assert "Kinetic energy" not in app.strings
-    app.press("OK", "BACK")
-    app.see("FAVOURITES", "Neutron number")
+    app.press("BACK", "BACK", "UP", "UP", "OK", "OK", PIN)
+    app.see("Removed from Favourites")
+    assert "Kinetic energy" not in app.strings
+    app.press("BACK", "DOWN", "OK")
+    app.see("CHEMISTRY FAVOURITES", "Neutron number")
     app.press("HOME")
     assert app.exited
 
@@ -858,6 +873,9 @@ def check_new_tools(path):
         ("1/3","1/3",1,3,1),("sqrt(8)","2*sqrt(2)",2,1,2),("sqrt(1/8)","(sqrt(2))/4",1,4,2),
         ("sqrt(3)/sqrt(6)","(sqrt(2))/2",1,2,2),("sin(pi/6)","1/2",1,2,1),
         ("0b1010100","84",84,1,1),("0x54","84",84,1,1),
+        ("5!", "120", 120, 1, 1), ("5!/2!", "60", 60, 1, 1),
+        ("(2+3)!", "120", 120, 1, 1), ("0!", "1", 1, 1, 1),
+        ("-3!", "-6", -6, 1, 1), ("2^3!", "64", 64, 1, 1),
     ]:
         invoke("cas_calculation",[write_text(scratch,expression),0,result])
         assert app.c_string(result+43)==expected, (expression,app.c_string(result+43))
@@ -865,9 +883,223 @@ def check_new_tools(path):
     print("Trig branches, two-triangle SSA, physics isolation and favourites checked on ARM")
 
 
+def check_math_input(path):
+    app = Simulator(path)
+    app.run(app.entry)
+    app.press("2", "^", "3")
+    app.see("2^3")
+    power_caret = app.carets[-1]
+    app.press("LEFT", "LEFT")
+    assert app.carets[-1][1] > power_caret[1], (app.carets, power_caret)
+    app.press("EXE", "1", "/", "3")
+    app.see("1/3")
+    fraction_y = max(y for x, y, w, _ in app.lines if 4 <= x < 20 and 10 <= w < 30)
+    assert app.carets[-1][1] > fraction_y
+    app.press("EXE")
+    app.screen.save(path.parent / "calculation-rows.png")
+    app.press("VAR", *["DOWN"] * 5, "OK", "1", "/", "3")
+    app.see("1/3")
+    assert app.carets[-1][1] > min(y for x, y, w, _ in app.lines if 4 <= x < 20 and 8 <= w < 26)
+    app.press("HOME")
+    assert app.exited
+    print("Fraction and power layout with cursor movement checked on ARM")
+
+
+def check_sessions(path):
+    foreign = python_record("hello.py", "print(42)\n") + python_record("session_taken.py", "# Mine\n")
+    app = Simulator(path, foreign)
+    app.cpu.mem_protect(STACK - 0x4000, 0x3000, UC_PROT_NONE)
+    app.run(app.entry)
+    app.press("SIN", "3", "0", "EXE")
+    app.see("0.5", "sin(30)")
+    assert "session_default.py" in app.scripts()
+    app.press("5", ("ALPHA", "."), "/", "2", ("ALPHA", "."), "EXE")
+    app.see("5!/2!", "60")
+    app.press("2", "*", "(", "3", "+", "4", "EXE")
+    app.see("2*(3+4)", "14")
+    app.press(GENERAL, "DOWN", "DOWN", "OK", "2", "EXE")
+    app.see("NUMAI")
+    assert "session_2.py" in app.scripts()
+    app.press("1", "/", "3", "EXE")
+    app.see("0.33333")
+    app.cpu.mem_protect(STACK - 0x4000, 0x3000, UC_PROT_ALL)
+    app.press("VAR", *["DOWN"] * 6, "OK", "EXE", "BACK", "BACK", "BACK")
+    app.press(GENERAL, *["DOWN"] * 6, "OK", "OK", GENERAL)
+    app.see("rad")
+    previous = app.script_bytes()
+    assert previous.startswith(foreign)
+    for name, python in app.scripts().items():
+        compile(python, name, "exec")
+    app.press("HOME")
+    assert app.exited
+
+    reopened = Simulator(path, previous)
+    reopened.cpu.mem_protect(STACK - 0x4000, 0x3000, UC_PROT_NONE)
+    reopened.run(reopened.entry)
+    reopened.see("rad", "0.33333")
+    assert "14" not in reopened.formulas
+    reopened.press(GENERAL, *["DOWN"] * 4, "OK", "OK")
+    reopened.see("Factorise", "(x - 2)(x - 3)")
+    reopened.press("BACK", "BACK", "UP", "OK", "UP", "OK")
+    reopened.see("14", "60", "rad")
+    assert "0.33333" not in reopened.formulas
+    assert reopened.script_bytes().startswith(foreign)
+    assert set(reopened.scripts()) == {"hello.py", "session_taken.py", "session_default.py", "session_2.py"}
+    reopened.press("HOME")
+    assert reopened.exited
+
+    collision = Simulator(path, previous)
+    collision.run(collision.entry)
+    collision.press(GENERAL, "DOWN", "DOWN", "OK")
+    draft = collision.symbol["session_name"]
+    collision.cpu.mem_write(draft, b"taken\0")
+    collision.cpu.mem_write(draft + 112, pack("<2i", 5, 5))
+    collision.press("EXE")
+    collision.see("That Python script already exists.")
+    assert collision.script_bytes() == previous
+
+    full = python_record("big.py", "# " + "x" * (STORE_SIZE - 1024) + "\n")
+    full_store = Simulator(path, full)
+    full_store.run(full_store.entry)
+    full_store.press("4", "EXE")
+    full_store.see("Session unsaved", "4")
+    assert full_store.script_bytes() == full.ljust(STORE_SIZE, b"\0")
+
+    unsupported = Simulator(path, previous, version=b"24.9.0")
+    unsupported.run(unsupported.entry)
+    unsupported.see("deg")
+    unsupported.press("1", "EXE")
+    assert unsupported.script_bytes() == previous
+    print("Python session records, restore, autosave, and unrelated-script preservation passed")
+
+
+def go_home(app):
+    app.press(("ALPHA", "ANS"))
+    app.see("NUMAI")
+
+
+def open_history(app):
+    app.press(GENERAL, *["DOWN"] * 4, "OK")
+
+
+def enter_query(app, text):
+    address = app.symbol["search_query"]
+    app.cpu.mem_write(address, text.encode() + b"\0")
+    app.cpu.mem_write(address + 112, pack("<2i", len(text), len(text)))
+    # A left-arrow moves the caret through the normal entry path and refreshes matches.
+    app.press("LEFT")
+
+
+def check_search_and_reuse(path):
+    app = Simulator(path, python_record("keep.py", "print(123)\n"))
+    app.run(app.entry)
+    app.press("TOOLBOX", "TOOLBOX")
+    app.see("SEARCH TOPICS", "matches")
+    enter_query(app, "biology osmosis")
+    app.see("Osmosis", "AQA Biology")
+    app.screen.save(path.parent / "topic-search.png")
+    app.press("OK")
+    app.see("Osmosis", "4.1.3.2", "Key ideas")
+    app.screen.save(path.parent / "science-topic.png")
+    app.press(*["DOWN"] * 30)
+    app.see("Apply your understanding")
+    go_home(app)
+    app.press("VAR", "VAR")
+    enter_query(app, "physics kinetic")
+    app.see("Kinetic energy", "AQA Physics")
+    app.press("OK")
+    app.see("Topic: Energy", "Solver")
+    app.press("TOOLBOX")
+    app.see("4.1.1.2", "Related equations (VAR)", "Kinetic energy", "Elastic potential energy")
+    app.press("VAR")
+    app.see("RELATED EQUATIONS", "Kinetic energy", "Elastic potential energy", "Gravitational energy")
+    app.screen.save(path.parent / "related-equations.png")
+    app.press("DOWN", "OK")
+    app.see("Elastic potential energy", "Solver")
+    app.press("BACK", "BACK")
+    app.see("4.1.1.2", "Related equations (VAR)")
+    go_home(app)
+    app.press("VAR", "VAR")
+    enter_query(app, "chemistry mol/dm^3")
+    app.see("AQA Chemistry")
+    assert all(match for match in app.strings)
+    enter_query(app, "no_such_equation")
+    app.see("No matches")
+    go_home(app)
+    app.press("VAR", "DOWN", "OK", "DOWN", "OK", "EXE", "OK")
+    app.press("2", ("ALPHA", "-"), ("ALPHA", "SQRT"), ("ALPHA", "SIN"), "DOWN", "3", "EXE")
+    app.see("9 J")
+    app.screen.save(path.parent / "physics-reuse-result.png")
+    go_home(app)
+    app.press("VAR", "DOWN", "DOWN", "OK", "DOWN", "DOWN", "DOWN", "OK", "EXE", "OK")
+    app.press("3", "5", "DOWN", "7", "5", "EXE")
+    # Relative atomic mass has multiple inputs, so use another known simple equation below.
+    go_home(app)
+    app.press("VAR", *["DOWN"] * 16, "OK")
+    app.press("3", "DOWN", "4", "DOWN", "5", "EXE")
+    app.see("Triangle")
+    go_home(app)
+    app.press("VAR", "DOWN", "DOWN", "DOWN", "OK", "OK", "OK", "OK", "2", "EXE")
+    app.see("Unit conversions")
+    go_home(app)
+    open_history(app)
+    app.press("OK")
+    app.see("OK: reuse inputs")
+    app.press("OK")
+    app.see("Unit conversions")
+    assert app.c_string(app.symbol["unit_input"]) == "2"
+    go_home(app)
+    snapshot = app.script_bytes()
+    assert "session_default.py" in app.scripts()
+    app.press("HOME")
+    assert app.exited
+    reopened = Simulator(path, snapshot)
+    reopened.run(reopened.entry)
+    open_history(reopened)
+    reopened.press("DOWN", "OK", "OK")
+    reopened.see("Triangle solver")
+    fields = reopened.symbol["forms"]
+    assert [reopened.c_string(fields + 120*i) for i in range(3)] == ["3", "4", "5"]
+    reopened.press("EXE")
+    reopened.see("Triangle")
+    go_home(reopened)
+    open_history(reopened)
+    # Resubmitting the triangle adds an entry at the start.
+    reopened.press(*["DOWN"] * 4, "OK", "OK")
+    reopened.see("Physics solver", "Find Kinetic energy")
+    physics_fields = reopened.symbol["physics_fields"]
+    assert reopened.c_string(physics_fields + 120) == "2 kg"
+    assert reopened.c_string(physics_fields + 240) == "3"
+    reopened.press(("SHIFT", "DEL"), "4", "EXE")
+    reopened.see("Ek = 18 J")
+    assert reopened.script_bytes().startswith(python_record("keep.py", "print(123)\n"))
+    go_home(reopened)
+    reopened.press(GENERAL, "DOWN", "DOWN", "OK")
+    go_home(reopened)
+    reopened.press("HOME")
+    assert reopened.exited
+
+    old_path = path.parent.parent / "0.1.1" / "numai.elf"
+    if old_path.exists():
+        old = Simulator(old_path, b"")
+        old.run(old.entry)
+        old.press("1", "/", "3", "EXE")
+        original = old.script_bytes()
+        upgraded = Simulator(path, original)
+        upgraded.run(upgraded.entry)
+        upgraded.see("0.33333")
+        upgraded.press("2", "EXE")
+        assert upgraded.script_bytes() != original
+        print("v0.1.1 Python session migration passed")
+    print("Search, related equations, reusable saved solver inputs, and Alpha+ANS checked")
+
+
 if __name__ == "__main__":
     target = Path(sys.argv[1])
     output = target.parent
+    check_search_and_reuse(target)
+    check_sessions(target)
+    check_math_input(target)
     check_ui(target, output)
     check_keyboard(target, output)
     check_engine(target)

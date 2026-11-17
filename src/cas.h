@@ -25,6 +25,15 @@ typedef struct {
     char exact[64];
 } CalculationValue;
 
+enum { CAS_VARIABLE_COUNT = 52 };
+typedef struct {
+    double value[CAS_VARIABLE_COUNT];
+    bool set[CAS_VARIABLE_COUNT];
+} CasVariables;
+
+void cas_get_variables(CasVariables *variables);
+void cas_set_variables(const CasVariables *variables);
+
 extern const char *const operation_names[OperationCount];
 bool cas_read_number(const char *input, double *value);
 bool cas_calculation(const char *input, bool degrees, CalculationValue *result);

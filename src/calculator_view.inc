@@ -27,6 +27,24 @@ static void math_text(int x,int y,const char *text,uint16_t ink,uint16_t paper,b
     }
 }
 
+static void large_math_text(int x,int y,const char *text,uint16_t ink,uint16_t paper,bool small) {
+    int width = small ? 5 : 9, height = small ? 10 : 18;
+    if (x < 0 || y < 0 || y + height > EADK_SCREEN_HEIGHT) return;
+    for (; *text && x + width <= EADK_SCREEN_WIDTH; text++, x += width) {
+        eadk_color_t pixels[9 * 18];
+        const uint8_t *glyph = font_glyph((unsigned char)*text);
+        for (int row = 0; row < height; row++) {
+            for (int column = 0; column < width; column++) {
+                int index = (row * CHAR_HEIGHT / height) * CHAR_WIDTH + column * CHAR_WIDTH / width;
+                unsigned coverage = (glyph[index / 2] >> (index % 2 ? 0 : 4)) & 15;
+                pixels[row * width + column] = !coverage ? paper :
+                                              coverage == 15 ? ink : blend_colour(ink, paper, coverage * 17);
+            }
+        }
+        eadk_display_push_rect((eadk_rect_t){x, y, width, height}, pixels);
+    }
+}
+
 static int imax(int a,int b) { return a>b?a:b; }
 
 static void format_calc_decimal(char *text,size_t size,double value) {
@@ -93,19 +111,19 @@ static CalcFace calculation_face(const CalcEntry *item,bool selected) {
     face.show_exact=*item->result.exact && (selected || !face.show_approx ||
                      strcmp(item->input,item->result.exact));
     if (face.show_approx) format_calc_decimal(face.decimal,sizeof(face.decimal),item->result.value);
-    face.input=measure_math(item->input,300);
-    if (face.show_exact) face.exact=measure_math(item->result.exact,160);
-    if (face.show_approx) face.approx=measure_math(face.decimal,198);
+    face.input=measure_calculation(item->input,300);
+    if (face.show_exact) face.exact=measure_calculation(item->result.exact,160);
+    if (face.show_approx) face.approx=measure_calculation(face.decimal,198);
     int right_width=face.exact.width+face.approx.width+(*item->result.exact&&face.show_approx?19:0);
     face.separate=face.input.width+right_width+29>face.right;
     if (face.separate) {
         face.above=imax(face.exact.above,face.approx.above);
         face.below=imax(face.exact.below,face.approx.below);
-        face.height=face.input.above+face.input.below+face.above+face.below+13;
+        face.height=face.input.above+face.input.below+face.above+face.below+21;
     } else {
         face.above=imax(face.input.above,imax(face.exact.above,face.approx.above));
         face.below=imax(face.input.below,imax(face.exact.below,face.approx.below));
-        face.height=face.above+face.below+9;
+        face.height=face.above+face.below+17;
     }
     if (face.height>164) face.height=164;
     return face;
@@ -119,21 +137,29 @@ static void calculation_part(const char *text,int limit,MathBox box,int x,int mi
     paint_math(text,limit,x,mid,&canvas);
 }
 
+static void large_calculation_part(const char *text,int limit,MathBox box,int x,int mid,
+                                   eadk_color_t ink,eadk_color_t paper,bool focused) {
+    eadk_color_t background = focused ? FocusTint : paper;
+    if (focused) rectangle(x-2,mid-box.above-1,box.width+4,box.above+box.below+2,background);
+    MathCanvas canvas = {large_math_text,rectangle,ink,background};
+    paint_calculation(text,limit,x,mid,&canvas);
+}
+
 static void draw_calculation_row(int row,int top,CalcFace face,bool selected) {
     const CalcEntry *item=&calculations[row];
     eadk_color_t paper=row%2?HistoryTint:White;
     int column=selected?calc_column:-1;
     rectangle(0,top,320,face.height,paper);
-    int mid=top+face.above+4, input_mid=mid;
+    int mid=top+face.above+8, input_mid=mid;
     if (face.separate) {
-        input_mid=top+face.input.above+3;
-        mid=top+face.input.above+face.input.below+7+face.above;
+        input_mid=top+face.input.above+6;
+        mid=top+face.input.above+face.input.below+12+face.above;
     }
-    calculation_part(item->input,300,face.input,7,input_mid,Ink,paper,column==CalcInputColumn);
+    large_calculation_part(item->input,300,face.input,7,input_mid,Ink,paper,column==CalcInputColumn);
     int right=face.right;
     if (face.show_approx) {
         right-=face.approx.width;
-        calculation_part(face.decimal,198,face.approx,right,mid,face.show_exact?Grey:Ink,paper,
+        large_calculation_part(face.decimal,198,face.approx,right,mid,face.show_exact?Grey:Ink,paper,
                          column==CalcDecimalColumn);
         if (face.show_exact || *item->result.exact) {
             char sign[2]={decimal_is_exact(&item->result)?'=':MathApprox,0};
@@ -143,7 +169,7 @@ static void draw_calculation_row(int row,int top,CalcFace face,bool selected) {
     }
     if (face.show_exact) {
         right-=face.exact.width;
-        calculation_part(item->result.exact,160,face.exact,right,mid,Ink,paper,column==CalcExactColumn);
+        large_calculation_part(item->result.exact,160,face.exact,right,mid,Ink,paper,column==CalcExactColumn);
     }
     if (selected && has_extras(&item->result)) {
         eadk_color_t focus=column==CalcDotsColumn?FocusTint:paper;
@@ -152,23 +178,10 @@ static void draw_calculation_row(int row,int top,CalcFace face,bool selected) {
     }
 }
 
-static bool structured_draft(void) {
-    if (!*prompt.text || prompt.cursor!=(int)strlen(prompt.text) || prompt.anchor!=prompt.cursor) return false;
-    int depth=0;
-    for (const char *q=prompt.text;*q;q++) {
-        if (*q=='(') depth++;
-        if (*q==')' && --depth<0) return false;
-    }
-    return depth==0 && (strpbrk(prompt.text,"/^") || strstr(prompt.text,"sqrt("));
-}
-
 static void draw_calculator(void) {
     home_header();
     bool selecting=page==CalcHistory || page==CalcExtras;
-    MathBox draft={0};
-    bool structured=!selecting && structured_draft();
-    if (structured) draft=measure_math(prompt.text,287);
-    int edit_height=structured?imax(25,draft.above+draft.below+7):26;
+    int edit_height=selecting ? 30 : expression_height(&prompt,312,70,true);
     int editor=CalcBottom-edit_height;
     rectangle(0,CalcTop,320,editor-CalcTop,HistoryTint);
     if (calc_count) {
@@ -191,16 +204,8 @@ static void draw_calculator(void) {
     }
     rectangle(0,editor,320,edit_height,White);
     rectangle(0,editor,320,1,Line);
-    if (structured) {
-        int mid=editor+draft.above+3;
-        MathCanvas c={math_text,rectangle,Ink,White};
-        paint_math(prompt.text,287,7,mid,&c);
-        rectangle(8+draft.width,mid-7,1,14,Blue);
-    } else if (!selecting) {
-        entry(4,editor+4,312,&prompt,"Type a calculation",true);
-    } else {
-        clipped(8,editor+5,prompt.text,TEXT_WIDTH,Grey,White);
-    }
+    if (!selecting) expression_entry(4,editor+1,312,edit_height-2,&prompt,"Type a calculation",true,true);
+    else clipped(8,editor+7,prompt.text,TEXT_WIDTH,Grey,White);
     footer(selecting?"UP/DOWN: row   LEFT/RIGHT: item   OK":"TOOLBOX: courses   VAR: CAS   EXE");
 }
 
