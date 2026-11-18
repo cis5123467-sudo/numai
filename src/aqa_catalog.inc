@@ -693,40 +693,148 @@ static const Topic chem_amount[] = {
 #undef SCIENCE_MORE
 #define SCIENCE_MORE "\n\nUnderstand the mechanism\n- Predict products from the reacting species and then balance atoms. For ionic equations, spectator ions are omitted. Where electrons are involved, oxidation is electron loss and reduction is electron gain.\n\nApply your understanding\n- For salt preparation, choose a method suitable for whether the salt is soluble and whether the starting reagent is soluble. In electrolysis, identify the ions present and distinguish a molten electrolyte from an aqueous solution."
 static const Topic chem_changes[] = {
-    S("4.4.1.1", "Metal oxides and oxygen", "Metals can react with oxygen to produce oxides. Oxidation can mean gaining oxygen and reduction losing oxygen. For example, heating copper in air forms copper oxide."
-      "\n\n- " "In 2Mg + O2 -> 2MgO, magnesium gains oxygen and is oxidised. In the reverse type of change, removing oxygen from an oxide is reduction."),
-    S("4.4.1.2", "Reactivity and displacement", "More reactive metals form ions more easily. Learn positions of potassium, sodium, lithium, calcium, magnesium, aluminium, carbon, zinc, iron, hydrogen and copper. More reactive metals displace less reactive metals from compounds."
-      "\n\n- " "Zinc displaces copper ions: zinc is more reactive and enters solution while copper metal forms. Copper would not displace zinc from the reverse mixture."),
-    S("4.4.1.3", "Metal extraction", "Unreactive metals may occur native. Metals below carbon in the reactivity series can often be obtained by reduction with carbon. More reactive metals commonly need electrolysis."
-      "\n\n- " "Carbon can remove oxygen from suitable oxides such as iron oxide. Aluminium is above carbon, so its extraction requires a different method."),
-    H("4.4.1.4", "Electron transfer and redox", "Oxidation is electron loss; reduction is electron gain. In a displacement, the more reactive metal forms ions as the less reactive metal ions gain electrons."
-      "\n\n- " "In Zn + Cu^2+ -> Zn^2+ + Cu, zinc loses two electrons and copper ions gain them. The linked oxidation and reduction occur together."),
-    S("4.4.2.1", "Acids with metals", "Reactive metals such as magnesium, zinc and iron form a salt and hydrogen with suitable dilute acids. Hydrochloric acid gives chlorides and sulfuric acid gives sulfates."
-      "\n\n- " "Magnesium and dilute hydrochloric acid give magnesium chloride and hydrogen. A gas test distinguishes hydrogen from carbon dioxide produced by a carbonate."),
-    H("4.4.2.1", "Acid-metal redox", "The metal loses electrons and is oxidised. Hydrogen ions gain electrons and form hydrogen gas, so they are reduced. The acid's remaining anion is a spectator in the net ionic reaction."
-      "\n\n- " "Write Zn -> Zn^2+ + 2e- and 2H+ + 2e- -> H2. Adding them cancels electrons and shows why this reaction is redox."),
-    S("4.4.2.2", "Neutralisation and salts", "Acid + base gives salt and water. With a carbonate, carbon dioxide also forms. The acid supplies the anion and the metal or base supplies the cation. Nitric acid forms nitrates."
-      "\n\n- " "Sulfuric acid plus copper oxide gives copper sulfate and water. An acid reacting with a carbonate also releases carbon dioxide."),
-    S("4.4.2.3", "Preparing soluble salts", "An acid can react with excess insoluble oxide or carbonate. Filter off unreacted solid and concentrate the clear solution. Cool it so crystals form and then separate and dry them."
-      "\n\n- " "Add the insoluble solid until some remains so the acid is used up. Remove the excess solid before concentrating and cooling the filtrate."),
-    S("4.4.2.4", "pH and neutralisation", "Acids release H+ in water; alkalis provide OH-. pH 7 is neutral, lower is acidic and higher alkaline. Use universal indicator or a pH probe. H+ + OH- -> H2O."
-      "\n\n- " "At pH 7 a solution is neutral at ordinary temperatures. Acidic and alkaline tests use indicator colours, while a meter gives a numeric reading."),
-    S("4.4.2.5", "Titration technique", "Use a pipette for a fixed aliquot, a burette for the measured addition and a suitable indicator for the endpoint. Obtain concordant titres and use their mean."
-      "\n\n- " "Read the burette at eye level and subtract initial from final. Use only concordant titres for a mean, leaving the rough attempt out."),
-    H("4.4.2.5", "Titration calculations", "Use concentration * volume in dm^3 to find moles of the known solution. Apply the equation's coefficients and divide by the unknown solution volume to find mol/dm^3."
-      "\n\n- " "20.0 cm^3 of 0.10 M acid reacting 1:1 with 25.0 cm^3 alkali gives 0.0020 mol alkali. Its concentration is 0.080 mol/dm^3."),
-    H("4.4.2.6", "Strong and weak acids", "Strong acids ionise essentially completely in water; weak acids ionise partly. Strength and concentration describe different things. A pH decrease of one means ten times the H+ concentration."
-      "\n\n- " "A dilute strong acid can have a higher pH than a more concentrated strong acid. Distinguish the fraction ionised from the original amount dissolved per volume."),
-    S("4.4.3.1", "Electrolysis principles", "An electrolyte contains mobile ions. Cations move to the negative cathode and anions to the positive anode. A direct supply drives a reaction that does not happen by itself."
-      "\n\n- " "A molten or aqueous electrolyte conducts through ions; the external wires conduct through electrons. Electrode products follow the ions and conditions present."),
-    S("4.4.3.2", "Electrolysis of molten salts", "A molten binary ionic compound can yield a metal at the cathode and a non-metal at the anode. Ions must be able to move, so the solid salt does not work."
-      "\n\n- " "Molten lead bromide can give lead at the cathode and bromine at the anode. Without mobile ions the solid cannot sustain electrolysis."),
-    S("4.4.3.3", "Aluminium extraction", "Aluminium oxide dissolved in molten cryolite is electrolysed. Cryolite lowers operating temperature. Aluminium forms at the cathode and oxygen reacts with carbon anodes, which need replacement."
-      "\n\n- " "In aluminium extraction oxygen formed at the anode reacts with carbon to form carbon dioxide. Replacing the anodes adds operating cost and emissions."),
-    S("4.4.3.4", "Electrolysis in water", "At an inert cathode, hydrogen usually forms unless the metal is less reactive than hydrogen. At an inert anode, halide ions can form halogen; otherwise oxygen commonly forms from hydroxide."
-      "\n\n- " "Aqueous copper chloride commonly gives copper and chlorine with inert electrodes. In a sulfate solution oxygen can form at the anode instead."),
-    H("4.4.3.5", "Electrolysis half equations", "Cathode reduction gains electrons, e.g. Cu^2+ + 2e- -> Cu. Anode oxidation releases electrons, e.g. 2Cl- -> Cl2 + 2e-. Balance both atoms and total charge."
-      "\n\n- " "For oxygen from OH-, 4OH- -> O2 + 2H2O + 4e-. Count H, O and total charge before accepting the half equation.")
+    S("4.4", "Key Ideas",
+      "1. A more reactive metal displaces a less reactive metal from its compound."
+      "\n\n- 2. Oxidation is gain of oxygen. Reduction is loss of oxygen."
+      "\n\n- 3. OIL RIG: Oxidation Is Loss, Reduction Is Gain of electrons (higher only)."
+      "\n\n- 4. Acid + metal -> salt + hydrogen."
+      "\n\n- 5. Acid + carbonate -> salt + water + carbon dioxide."
+      "\n\n- 6. Hydrochloric acid makes chlorides, sulfuric acid makes sulfates and nitric acid makes nitrates."
+      "\n\n- 7. Positive ions go to the negative cathode. Negative ions go to the positive anode."
+      "\n\n- 8. Cathode = reduction. Anode = oxidation, using electron definitions (higher only)."
+      "\n\n- 9. Aqueous electrolysis: compare the metal with hydrogen at the cathode. At the anode, check for halide ions, otherwise expect oxygen with inert electrodes."
+      "\n\n- 10. Strong/weak describes ionisation. Concentrated/dilute describes the amount dissolved per volume (higher only)."
+      "\n\nAcids, bases and salts\nKey reaction patterns\n"
+      "\n- Acid + metal -> salt + hydrogen."
+      "\n\n- Acid + metal oxide -> salt + water."
+      "\n\n- Acid + metal hydroxide -> salt + water."
+      "\n\n- Acid + metal carbonate -> salt + water + carbon dioxide."),
+    S("4.4.1.1", "Metal oxides and oxygen",
+      "Metals react with oxygen to produce metal oxides. Oxidation means gain of oxygen and reduction means loss of oxygen."
+      "\n\n- Example: 2Mg + O2 -> 2MgO. Magnesium gains oxygen, so magnesium is oxidised. Heating copper in air forms black copper oxide."
+      "\n\n- Redox example: 2CuO + C -> 2Cu + CO2. Copper oxide loses oxygen and is reduced. Carbon gains oxygen and is oxidised. Oxidation and reduction happen together."
+      "\n\n- Exam rule: identify the substance that gains or loses oxygen, then give the matching definition. The oxygen definitions apply to both tiers."),
+    S("4.4.1.2", "Reactivity and displacement",
+      "Reactivity series, most to least reactive:\nPotassium\nSodium\nLithium\nCalcium\nMagnesium\nAluminium\nCarbon\nZinc\nIron\nHydrogen\nCopper"
+      "\n\n- Carbon and hydrogen are non-metals. Their positions help predict extraction methods and reactions with acids. A more reactive metal loses electrons and forms positive ions more readily."
+      "\n\n- Cold water at room temperature: potassium, sodium and lithium produce a metal hydroxide and hydrogen. Potassium reacts most vigorously of these three."
+      "\n\n- Calcium reacts with cold water to produce calcium hydroxide and hydrogen. Magnesium reacts very slowly. Zinc, iron and copper have no significant reaction with cold water."
+      "\n\n- Example: sodium + water -> sodium hydroxide + hydrogen. Balanced: 2Na + 2H2O -> 2NaOH + H2."
+      "\n\n- Displacement rule: a more reactive metal displaces a less reactive metal from a compound. Zinc + copper sulfate -> zinc sulfate + copper. Zinc is above copper in the series."
+      "\n\n- Copper + zinc sulfate -> no reaction. Copper is less reactive and cannot displace zinc."
+      "\n\n- Use experimental observations to rank unfamiliar metals. A displacement shows that the added metal is more reactive than the metal displaced."),
+    S("4.4.1.3", "Metal extraction",
+      "Most metals occur in compounds and need chemical reactions to extract them. Very unreactive metals such as gold may be found as the element itself."
+      "\n\n- Below carbon: a metal can be extracted from its oxide by reduction with carbon. Carbon removes oxygen from the metal oxide."
+      "\n\n- Above carbon: electrolysis is used when carbon cannot reduce the oxide. Aluminium is above carbon, so reduction with carbon is unsuitable."
+      "\n\n- Example: copper oxide + carbon -> copper + carbon dioxide. Balanced: 2CuO + C -> 2Cu + CO2. Copper oxide is reduced and carbon is oxidised."
+      "\n\n- Carbon can also remove oxygen from suitable iron oxides. For an unfamiliar extraction process, compare the metal's reactivity with the reducing agent and use the information supplied."),
+    H("4.4.1.4", "Electron transfer and redox",
+      "OIL RIG: Oxidation Is Loss, Reduction Is Gain of electrons. Oxidation and reduction occur together in a redox reaction."
+      "\n\n- Displacement example: Zn + Cu^2+ -> Zn^2+ + Cu."
+      "\n\n- Zinc loses two electrons and forms positive zinc ions. Zinc is oxidised. Copper ions gain two electrons and form copper metal. The copper ions are reduced."
+      "\n\n- Oxidation half equation: Zn -> Zn^2+ + 2e-. Reduction half equation: Cu^2+ + 2e- -> Cu."
+      "\n\n- Adding the half equations cancels the electrons. Sulfate ions do not change in zinc reacting with copper sulfate and are spectator ions."
+      "\n\n- Check both atoms and overall charge on each side. Name the species actually gaining electrons, such as copper ions, when identifying reduction."),
+    S("4.4.2.1", "Acids with metals",
+      "Acid + metal -> salt + hydrogen. Magnesium, zinc and iron react with suitable dilute hydrochloric or sulfuric acid."
+      "\n\n- Magnesium reacts most vigorously of these three, followed by zinc, then iron. Copper does not react with these dilute acids because it is below hydrogen in the reactivity series."
+      "\n\n- Example: magnesium + hydrochloric acid -> magnesium chloride + hydrogen. Mg + 2HCl -> MgCl2 + H2."
+      "\n\n- Hydrochloric acid forms chlorides. Sulfuric acid forms sulfates. Zinc + sulfuric acid -> zinc sulfate + hydrogen."
+      "\n\n- Hydrogen test: hold a lit splint near a small sample of the gas. Hydrogen burns with a squeaky pop."
+      "\n\n- Exam check: a metal produces hydrogen with a suitable acid, whereas a carbonate produces carbon dioxide."),
+    H("4.4.2.1", "Acid-metal redox",
+      "In acid-metal reactions the metal loses electrons and is oxidised. Hydrogen ions gain electrons and are reduced to hydrogen gas."
+      "\n\n- Zinc oxidation: Zn -> Zn^2+ + 2e-. Hydrogen ion reduction: 2H+ + 2e- -> H2."
+      "\n\n- Overall ionic equation: Zn + 2H+ -> Zn^2+ + H2. The electrons cancel when the half equations are added."
+      "\n\n- The remaining acid anion is a spectator ion. In hydrochloric acid the chloride ions are present before and after the reaction."
+      "\n\n- Identify both changes: zinc loses electrons and hydrogen ions gain electrons. Saying only that bubbles appear describes an observation rather than explaining redox."),
+    S("4.4.2.2", "Neutralisation and salts",
+      "Reaction patterns:\nAcid + metal -> salt + hydrogen.\nAcid + metal oxide -> salt + water.\nAcid + metal hydroxide -> salt + water.\nAcid + metal carbonate -> salt + water + carbon dioxide."
+      "\n\n- Examples: magnesium + hydrochloric acid -> magnesium chloride + hydrogen. Copper oxide + sulfuric acid -> copper sulfate + water."
+      "\n\n- Calcium carbonate + nitric acid -> calcium nitrate + water + carbon dioxide. CaCO3 + 2HNO3 -> Ca(NO3)2 + H2O + CO2."
+      "\n\n- Carbon dioxide turns limewater cloudy. Use this gas test to distinguish a carbonate reaction from a metal reaction producing hydrogen."
+      "\n\n- Salt names: hydrochloric acid -> chloride, sulfuric acid -> sulfate, nitric acid -> nitrate. The metal or positive ion supplies the first part of the salt name."
+      "\n\n- Example: magnesium oxide + sulfuric acid -> magnesium sulfate + water. MgO + H2SO4 -> MgSO4 + H2O."
+      "\n\n- A base neutralises an acid. An alkali is a soluble base. Metal oxides and hydroxides can act as bases."),
+    S("4.4.2.3", "Preparing soluble salts",
+      "Required practical: make pure, dry crystals of a soluble salt from an acid and an insoluble solid. Example: copper oxide + sulfuric acid -> copper sulfate + water."
+      "\n\n- 1. Gently warm dilute sulfuric acid in a beaker. 2. Add copper oxide in small portions while stirring."
+      "\n\n- 3. Keep adding copper oxide until some remains unreacted. The solid is in excess, showing that the acid has been used up."
+      "\n\n- 4. Filter the mixture. Excess copper oxide stays as the residue. Copper sulfate solution passes through as the filtrate."
+      "\n\n- 5. Gently heat the filtrate in an evaporating basin using a water bath or electric heater to evaporate some water."
+      "\n\n- 6. Leave the concentrated solution to cool so crystals form. 7. Filter off the crystals and dry them between filter papers."
+      "\n\n- Why excess? It ensures no acid remains. Why filter? It removes unreacted solid. Why evaporate? It concentrates the solution. Why cool? The salt crystallises from the concentrated solution."
+      "\n\n- Exam tip: do not evaporate completely to dryness. Stop after concentrating the solution and allow it to crystallise as it cools."),
+    S("4.4.2.4", "pH and neutralisation",
+      "An acid produces hydrogen ions, H+, in aqueous solution. An alkali is a soluble base and produces hydroxide ions, OH-, in aqueous solution."
+      "\n\n- Neutralisation: hydrogen ions react with hydroxide ions to form water. H+ + OH- -> H2O."
+      "\n\n- pH below 7: acidic, with universal indicator red, orange or yellow. pH 7: neutral, green. pH above 7: alkaline, blue or purple."
+      "\n\n- Universal indicator gives an approximate pH. A pH probe gives a numerical reading. Use the pH value to decide whether a solution is acidic, neutral or alkaline."
+      "\n\n- A base neutralises an acid, but only a soluble base is an alkali. For acid plus metal oxide or hydroxide, the products are a salt and water."),
+    S("4.4.2.5", "Titration technique",
+      "A titration measures the volume of acid needed to neutralise an alkali, or the reverse. Both reactants are soluble, so excess solid cannot be filtered off."
+      "\n\n- 1. Use a pipette and pipette filler to transfer a fixed volume of alkali into a conical flask. 2. Add a few drops of a suitable indicator."
+      "\n\n- 3. Fill a burette with acid. Check that its tip is filled and record the initial reading at eye level."
+      "\n\n- 4. Add acid while swirling the flask. 5. Near the endpoint, add acid drop by drop until the indicator changes colour."
+      "\n\n- 6. Record the final reading. Volume used, or titre, = final burette reading - initial reading."
+      "\n\n- 7. Repeat for concordant results. These are close together, commonly within 0.10 cm^3 in school methods. Calculate a mean from the concordant titres, excluding the rough trial."
+      "\n\n- A white tile helps show the colour change. Example: initial 1.20 cm^3, final 21.30 cm^3, titre 20.10 cm^3."
+      "\n\n- Example mean: concordant titres 20.10 and 20.20 cm^3 give (20.10+20.20)/2=20.15 cm^3. Do not include an inconsistent rough result."
+      "\n\n- To prepare a pure soluble salt from an acid and alkali, first find the reacting volumes by titration. Repeat with those volumes and no indicator, then concentrate, cool, filter and dry the crystals."),
+    H("4.4.2.5", "Titration calculations",
+      "Use moles = concentration in mol/dm^3 * volume in dm^3. Convert cm^3 to dm^3 by dividing by 1000."
+      "\n\n- Worked example: 25.0 cm^3 NaOH reacts with 20.0 cm^3 HCl of concentration 0.100 mol/dm^3."
+      "\n\n- Balanced equation: HCl + NaOH -> NaCl + H2O."
+      "\n\n- Step 1. Acid volume = 20.0/1000 = 0.0200 dm^3. Moles HCl = 0.100*0.0200 = 0.00200 mol."
+      "\n\n- Step 2. The HCl:NaOH ratio is 1:1. Moles NaOH = 0.00200 mol."
+      "\n\n- Step 3. Alkali volume = 25.0/1000 = 0.0250 dm^3. Concentration NaOH = 0.00200/0.0250 = 0.0800 mol/dm^3."
+      "\n\n- Always use the balanced equation. H2SO4 + 2NaOH -> Na2SO4 + 2H2O has a 1:2 acid:alkali ratio."
+      "\n\n- For the same 0.00200 mol of sulfuric acid, the required NaOH is 0.00400 mol. In 0.0250 dm^3 its concentration would be 0.160 mol/dm^3."
+      "\n\n- To convert mol/dm^3 to g/dm^3, multiply by relative formula mass. NaOH has Mr=40, so 0.0800 mol/dm^3 corresponds to 3.20 g/dm^3."),
+    H("4.4.2.6", "Strong and weak acids",
+      "A strong acid completely ionises in aqueous solution. Examples are hydrochloric, nitric and sulfuric acids."
+      "\n\n- A weak acid partially ionises in water. Examples are ethanoic, citric and carbonic acids."
+      "\n\n- Strength describes the proportion of acid molecules that ionise. Concentration describes the amount of acid dissolved in a given volume."
+      "\n\n- A strong acid can be dilute. A weak acid can be concentrated. Dilution changes concentration and does not turn a strong acid into a weak acid."
+      "\n\n- For the same concentration, the stronger acid has the lower pH. A decrease of one pH unit means the hydrogen ion concentration increases by a factor of 10."
+      "\n\n- Example: pH 2 has 10^(4-2)=100 times the hydrogen ion concentration of pH 4. A change from pH 3 to pH 5 decreases the hydrogen ion concentration by a factor of 100."),
+    S("4.4.3.1", "Electrolysis principles",
+      "Electrolysis uses an electric current to break down an ionic compound. The ionic compound must be molten or dissolved in water so ions can move and carry charge."
+      "\n\n- A solid ionic compound cannot conduct because its ions are held in fixed positions. In a molten or aqueous electrolyte the ions move to electrodes connected to a direct current supply."
+      "\n\n- Cathode: negative electrode, attracts positive ions. Anode: positive electrode, attracts negative ions. Opposite charges attract."
+      "\n\n- At the electrodes ions are discharged and form products. Ions carry charge through the electrolyte. Electrons carry charge through the external metal wires."
+      "\n\n- Remember the electrode signs for electrolysis. The negative cathode attracts positive metal ions or hydrogen ions."),
+    S("4.4.3.2", "Electrolysis of molten salts",
+      "For a simple molten binary ionic compound, the metal forms at the negative cathode and the non-metal forms at the positive anode."
+      "\n\n- Example: molten lead bromide produces lead at the negative cathode and bromine at the positive anode."
+      "\n\n- Lead ions are positive, so they move to the cathode. Bromide ions are negative, so they move to the anode. Heating provides mobile ions in the molten compound."
+      "\n\n- Prediction example: molten sodium chloride gives sodium at the cathode and chlorine at the anode. The product rule differs from that for an aqueous sodium chloride solution."
+      "\n\n- Exam check: identify whether the compound is molten or aqueous before predicting the electrode products."),
+    S("4.4.3.3", "Aluminium extraction",
+      "Aluminium is more reactive than carbon. It is extracted by electrolysis because carbon cannot reduce aluminium oxide."
+      "\n\n- Aluminium oxide is dissolved in molten cryolite. The mixture has a lower melting point than pure aluminium oxide, so less energy is required to keep the electrolyte molten."
+      "\n\n- Molten aluminium forms at the negative cathode. Oxygen forms at the positive carbon anode."
+      "\n\n- The oxygen reacts with the carbon anode to produce carbon dioxide. The carbon anodes are consumed and must be replaced regularly."
+      "\n\n- Electrolysis is expensive because energy is needed to heat the mixture and to supply the electric current."
+      "\n\n- Exam explanations: cryolite reduces the operating temperature and energy cost. Carbon anodes need replacement because they react with oxygen, rather than simply melting."),
+    S("4.4.3.4", "Electrolysis in water",
+      "Aqueous means dissolved in water. Water supplies additional ions, so there is a choice of products at each electrode. These GCSE prediction rules use inert electrodes."
+      "\n\n- Negative cathode: if the metal is more reactive than hydrogen, hydrogen is produced. If the metal is less reactive than hydrogen, the metal is produced."
+      "\n\n- Positive anode: if halide ions are present, the halogen is produced. Without halide ions, oxygen is produced. Halide ions include chloride, bromide and iodide."
+      "\n\n- Examples: aqueous sodium chloride -> hydrogen at the cathode and chlorine at the anode. Aqueous copper sulfate -> copper at the cathode and oxygen at the anode."
+      "\n\n- Aqueous potassium bromide -> hydrogen at the cathode and bromine at the anode. Aqueous copper chloride -> copper and chlorine."
+      "\n\n- Required practical: pour an aqueous ionic solution into a beaker. Put two inert electrodes, such as graphite rods, into it without allowing them to touch."
+      "\n\n- Connect to a direct current supply. Observe each electrode and record gases or a metal coating. Test collected gas samples and compare observations with predictions."
+      "\n\n- Repeat with other solutions. For a fair comparison, keep electrode material, current, concentration and time consistent where appropriate."
+      "\n\n- Gas tests: hydrogen gives a squeaky pop with a lit splint. Oxygen relights a glowing splint. Chlorine bleaches damp litmus paper."),
+    H("4.4.3.5", "Electrolysis half equations",
+      "At the negative cathode, positive ions gain electrons. This is reduction. At the positive anode, negative ions lose electrons. This is oxidation."
+      "\n\n- Copper cathode: Cu^2+ + 2e- -> Cu. The total charge is zero on each side."
+      "\n\n- Chlorine anode: 2Cl- -> Cl2 + 2e-. There are two chlorine atoms and a charge of -2 on each side."
+      "\n\n- Oxygen anode: 4OH- -> O2 + 2H2O + 4e-. Check four O atoms, four H atoms and charge -4 on each side."
+      "\n\n- Hydrogen cathode: 2H+ + 2e- -> H2. Aluminium cathode: Al^3+ + 3e- -> Al."
+      "\n\n- Check atoms and total charge, then check the electrons are on the correct side. Reduction consumes electrons. Oxidation releases electrons.")
 };
 
 #undef SCIENCE_MORE

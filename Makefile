@@ -1,6 +1,6 @@
 CC = arm-none-eabi-gcc
 NWLINK ?= npx --yes -- nwlink@1.0.0
-VERSION ?= 0.1.2
+VERSION ?= 0.1.2-r1
 BUILD = build/$(VERSION)
 APP = ../numai-$(VERSION).nwa
 OBJECTS = $(BUILD)/main.o $(BUILD)/cas.o $(BUILD)/topics.o $(BUILD)/physics.o $(BUILD)/chemistry.o $(BUILD)/units.o $(BUILD)/solvers.o $(BUILD)/mathview.o $(BUILD)/scriptstore.o $(BUILD)/icon.o

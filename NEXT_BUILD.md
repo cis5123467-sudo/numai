@@ -1,5 +1,13 @@
 # NumAI next-build queue
 
+## Included in v0.1.2-r1
+
+- Change the Toolbox menu's header title to **COURSES**.
+- Change the calculation home screen's header title from **NUMAI** to **CALCULATION**. Keep both titles centred and uppercase to match the existing header style.
+
+- Expand all existing AQA Chemistry Chemical Changes pages with the supplied detailed Topic 4 notes, balanced examples, gas tests, salt preparation and electrolysis practicals, titration methods and worked calculations. Keep Higher-only material labelled.
+- Add **Key Ideas** as the first Chemical Changes entry, containing the ten requested quick facts.
+
 ## Included in v0.1.2
 
 - Make equation and solver calculations reusable from History. Selecting a saved calculation should offer reopening the original tool with its previous equation, chosen unknown, input values, and units filled in, so users can edit values and calculate again. Preserve the details in saved sessions so reuse works after leaving and reopening NumAI.

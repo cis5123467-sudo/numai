@@ -186,7 +186,7 @@ class Simulator:
         self.waiting = False
         pc = self.cpu.reg_read(UC_ARM_REG_PC) | 1 if address is None else address
         # A batch of key presses can redraw the screen once per key.
-        self.cpu.emu_start(pc, 0, count=18_000_000 + len(self.keyboard) * 500_000)
+        self.cpu.emu_start(pc, 0, count=60_000_000 + len(self.keyboard) * 2_000_000)
         assert self.waiting or self.exited, hex(self.cpu.reg_read(UC_ARM_REG_PC))
 
     def press(self, *keys):
@@ -208,7 +208,7 @@ def check_ui(path, screenshots):
     guard_base, guard_length = STACK - 0x4000, 0x3000
     app.cpu.mem_protect(guard_base, guard_length, UC_PROT_NONE)
     app.run(app.entry)
-    app.see("NUMAI", "deg", "TOOLBOX", "VAR")
+    app.see("CALCULATION", "deg", "TOOLBOX", "VAR")
     assert app.screen.getpixel((0, 0)) == app.colour(0xfda6)
     assert not any("UK" in line for line in app.strings)
     app.screen.save(screenshots / "startup.png")
@@ -224,7 +224,7 @@ def check_ui(path, screenshots):
     app.press(*["DOWN"] * 28)
     app.see(">**", "Complete the square")
     app.press("BACK", "DOWN", "OK", "OK", "BACK", "BACK")
-    app.see("NUMAI", "rad")
+    app.see("CALCULATION", "rad")
     app.press("TOOLBOX")
     app.see("Favourites", "Edexcel IGCSE Maths A", "OCR Level 3 Additional Maths",
             "Edexcel A Level Maths", "AQA Physics", "AQA Biology", "AQA Chemistry")
@@ -425,7 +425,7 @@ def check_catalog(path):
                     app.press("BACK", "BACK")
                 else:
                     base, label, _ = name.partition(" (higher only)")
-                    science_notes = app.c_string(note, 850)
+                    science_notes = app.c_string(note, 6000)
                     reference = science_notes.splitlines()[0]
                     assert science_notes.count("\n- ") >= 2, base
                     app.see(base[:40], reference)
@@ -451,7 +451,7 @@ def check_catalog(path):
         app.press("BACK")
         if course + 1 < course_total:
             app.press("DOWN")
-    assert (entries, forms, examples, science_cards, higher_cards) == (112, 58, 224, 397, 76)
+    assert (entries, forms, examples, science_cards, higher_cards) == (112, 58, 224, 398, 76)
     print(f"{entries} maths topics, {examples} new worked examples, {forms} calculator examples, "
           f"and {science_cards} science cards checked ({higher_cards} Higher-only labels)")
 
@@ -693,7 +693,7 @@ def check_physics(path):
     app.see("35 mL", "Number copied to NumAI clipboard")
     app.screen.save(path.parent / "unit-converter.png")
     app.press(*["BACK"] * 6, ("SHIFT", "TOOLBOX"))
-    app.see("NUMAI", "35")
+    app.see("CALCULATION", "35")
     app.press("HOME")
     assert app.exited
 
@@ -918,7 +918,7 @@ def check_sessions(path):
     app.press("2", "*", "(", "3", "+", "4", "EXE")
     app.see("2*(3+4)", "14")
     app.press(GENERAL, "DOWN", "DOWN", "OK", "2", "EXE")
-    app.see("NUMAI")
+    app.see("CALCULATION")
     assert "session_2.py" in app.scripts()
     app.press("1", "/", "3", "EXE")
     app.see("0.33333")
@@ -975,7 +975,7 @@ def check_sessions(path):
 
 def go_home(app):
     app.press(("ALPHA", "ANS"))
-    app.see("NUMAI")
+    app.see("CALCULATION")
 
 
 def open_history(app):

@@ -246,7 +246,11 @@ static void string_at(int x, int y, const char *text, eadk_color_t ink, eadk_col
         "mass", "charge", "force", "momentum", "density", "pressure", "half-life",
         "magnetic field", "induction", "infrared", "redshift", "ionic", "covalent",
         "delocalised", "ions", "electrolysis", "oxidation", "reduction", "precipitate",
-        "chromatography", "functional group", "hydrocarbons", "polymers", "yield"
+        "chromatography", "functional group", "hydrocarbons", "polymers", "yield",
+        "cathode", "anode", "electrolysis", "salt", "hydrogen", "oxygen", "carbon dioxide",
+        "reactivity", "displacement", "neutralisation", "alkali", "base", "acid",
+        "OIL RIG", "ionises", "concordant", "titration", "filtrate", "crystals",
+        "cryolite", "halide", "higher only", "Key Ideas", "Oxidation Is Loss", "Reduction Is Gain"
     };
     const char *at = text;
     while (*at && x < EADK_SCREEN_WIDTH) {
@@ -359,7 +363,7 @@ static void home_header(void) {
     rectangle(0, 0, 320, 21, Gold);
     string_at(6, 3, degrees ? "deg" : "rad", White, Gold);
     string_at(38, 3, modifier_text(), White, Gold);
-    string_at((320 - 5*CHAR_WIDTH)/2, 3, "NUMAI", White, Gold);
+    string_at((320 - 11*CHAR_WIDTH)/2, 3, "CALCULATION", White, Gold);
 }
 
 static void footer(const char *label) {
@@ -981,7 +985,7 @@ static void draw(void) {
             draw_calculator();
             if (page == CalcExtras) draw_calc_extras();
             break;
-        case Toolbox: draw_list("Toolbox", NULL, true); break;
+        case Toolbox: draw_list("Courses", NULL, true); break;
         case Chapters: draw_list(course()->title, course()->code, false); break;
         case Topics: draw_list(chapter()->title, NULL, false); break;
         case TopicMenu: draw_list(topic()->title, NULL, false); break;
