@@ -37,5 +37,6 @@ secrets*.json
 
 # Local planning, documentation, research and validation (not app build inputs)
 *.md
+!/README.md
 /docs/
 /tools/
