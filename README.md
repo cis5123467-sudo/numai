@@ -2,13 +2,13 @@
 
 Revision notes, equation sheets, worked examples, scientific solvers and a CAS calculator in a native **320 × 240 NumWorks external app**. This is the **original NumAI project**; [NumAI for Casio](https://github.com/cis5123467-sudo/numai-casio) is its related Graph Math+ port.
 
-Current release: **v0.1.3**. Target: **NumWorks N0120 running Epsilon 24.8.0**.
+Current release: **v0.1.3-r1**. Target: **NumWorks N0120 running Epsilon 24.8.0**.
 
-[Download the latest release](https://github.com/cis5123467-sudo/numai/releases/latest) · [Download v0.1.3](https://github.com/cis5123467-sudo/numai/releases/download/0.1.3/numai-0.1.3.nwa) · [Detailed release notes](https://github.com/cis5123467-sudo/numai/releases/tag/0.1.3) · [Report an issue](https://github.com/cis5123467-sudo/numai/issues)
+[Download the latest release](https://github.com/cis5123467-sudo/numai/releases/latest) · [Download v0.1.3-r1](https://github.com/cis5123467-sudo/numai/releases/download/0.1.3-r1/numai-0.1.3-r1.nwa) · [Detailed release notes](https://github.com/cis5123467-sudo/numai/releases/tag/0.1.3-r1) · [Report an issue](https://github.com/cis5123467-sudo/numai/issues)
 
 ## Install
 
-1. Download **`numai-0.1.3.nwa`** from GitHub Releases. Choose the `.nwa` asset rather than GitHub's automatic source-code archive.
+1. Download **`numai-0.1.3-r1.nwa`** from GitHub Releases. Choose the `.nwa` asset rather than GitHub's automatic source-code archive.
 2. Connect the calculator by USB and open the [NumWorks external-app installer](https://my.numworks.com/apps) using your existing supported installation setup and a WebUSB-capable browser, such as desktop Chrome or Edge.
 3. Select the calculator, add the `.nwa` file and complete the installation.
 4. Open **NumAI** from the calculator's application menu. It starts directly in **CALCULATION**; use **TOOLBOX** for courses or **VAR** for equations and CAS.
@@ -43,6 +43,12 @@ The Courses menu begins with **Favourites**, then **Search topics**, then the si
 | AQA GCSE Chemistry — 8462 | Atomic structure, bonding, quantitative chemistry, chemical changes, energy changes, rates/equilibrium, organic chemistry, analysis, atmosphere and resources |
 
 Science notes include practical and scientific-skills material. **(higher only)** identifies Higher-tier entries; mixed-tier notes identify relevant Higher-only material within the text. The science course is the full separate-science course, so separate-only content remains available even where revision priorities focus on combined/Trilogy topics.
+
+### Physics Paper 1 revision in v0.1.3-r1
+
+Open **TOOLBOX → AQA Physics**, then choose **Energy**, **Electricity**, **Particle model of matter** or **Atomic structure**. Each chapter starts with a refreshed **Key Ideas** page. The detailed notes lead with the relevant Combined Science: Trilogy material and explain equation choice, substitutions, units and common exam mistakes. Higher-only and separate Physics content is identified.
+
+There are also four original **6-mark practice questions with bullet-point model answers**, under **Kinetic, elastic and GPE**, **The National Grid**, **Specific latent heat** and **Contamination and irradiation**.
 
 ### Physics expansion in v0.1.3
 
@@ -238,14 +244,14 @@ make build
 make check
 ```
 
-`make build` creates **`../numai-0.1.3.nwa`**, one directory above the repository. `make check` links a loader-oriented test ELF at **`build/0.1.3/numai.elf`** using nwlink. It is a packaging/linking check, not an automated runtime test.
+`make build` creates **`releases/numai-0.1.3-r1.nwa`** inside the repository. `make check` links a loader-oriented test ELF at **`build/0.1.3-r1/numai.elf`** using nwlink. It is a packaging/linking check, not an automated runtime test.
 
 The Makefile pins **nwlink 1.0.0**, generates its EADK header through nwlink and targets **Cortex-M7**, Thumb instructions and hardware floating point. C99 sources compile with size optimisation and warnings treated as errors. Icon conversion is part of the build; no local research documents or test tools are needed to compile the app.
 
 Override the version for a separately named build:
 
 ```sh
-make check VERSION=0.1.3-custom
+make check VERSION=0.1.3-r1-custom
 ```
 
 This changes the artifact name, build directory and compiled version string. It does not install the app. Transfer the `.nwa` separately through your authorised calculator installation setup. `make clean` removes local build directories.
@@ -269,7 +275,7 @@ This changes the artifact name, build directory and compiled version string. It 
 | `src/sessions.inc`, `src/scriptstore.c`, `src/scriptstore.h` | Session serialisation and supported Epsilon Python-store access |
 | `src/ascii_font.inc`, `src/icon.png` | Bundled font data and app icon |
 
-Generated binaries, objects and test ELFs are ignored. Release `.nwa` files are distributed as GitHub Release assets. Local queues, research, assistant instructions and validation tools remain ignored; this README is the public-documentation exception.
+Local `.nwa` files are kept in `releases/` and ignored by Git, along with objects and test ELFs. Downloadable `.nwa` files are distributed as GitHub Release assets. Local queues, research, assistant instructions and validation tools remain ignored; this README is the public-documentation exception.
 
 ## Validation and compatibility
 

@@ -1,8 +1,9 @@
 CC = arm-none-eabi-gcc
 NWLINK ?= npx --yes -- nwlink@1.0.0
-VERSION ?= 0.1.3
+VERSION ?= 0.1.3-r1
 BUILD = build/$(VERSION)
-APP = ../numai-$(VERSION).nwa
+RELEASE_DIR = releases
+APP = $(RELEASE_DIR)/numai-$(VERSION).nwa
 OBJECTS = $(BUILD)/main.o $(BUILD)/cas.o $(BUILD)/topics.o $(BUILD)/physics.o $(BUILD)/chemistry.o $(BUILD)/units.o $(BUILD)/solvers.o $(BUILD)/mathview.o $(BUILD)/scriptstore.o $(BUILD)/icon.o
 DEVICE_FLAGS = -mthumb -mfloat-abi=hard -mcpu=cortex-m7 -mfpu=fpv5-sp-d16 -DPLATFORM_DEVICE=1
 
@@ -10,6 +11,9 @@ DEVICE_FLAGS = -mthumb -mfloat-abi=hard -mcpu=cortex-m7 -mfpu=fpv5-sp-d16 -DPLAT
 build: $(APP)
 
 $(BUILD):
+	mkdir -p $@
+
+$(RELEASE_DIR):
 	mkdir -p $@
 
 $(BUILD)/eadk.h: | $(BUILD)
@@ -25,7 +29,7 @@ $(BUILD)/main.o: src/ascii_font.inc src/calculator_view.inc src/revision_view.in
 $(BUILD)/icon.o: src/icon.png | $(BUILD)
 	$(NWLINK) png-icon-o $< $@
 
-$(APP): $(OBJECTS)
+$(APP): $(OBJECTS) | $(RELEASE_DIR)
 	$(CC) $(DEVICE_FLAGS) -Wl,--relocatable -nostartfiles --specs=nano.specs --specs=nosys.specs -Wl,-e,main,--gc-sections -Wl,-u,eadk_app_name,-u,eadk_app_icon,-u,eadk_api_level,-u,_printf_float $^ -lm -o $@.tmp
 	mv $@.tmp $@
 
