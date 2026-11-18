@@ -261,19 +261,15 @@ This changes the artifact name, build directory and compiled version string. It 
 | File or group | Purpose |
 | --- | --- |
 | `Makefile` | Toolchain flags, versioned objects, icon conversion and `.nwa` packaging |
-| `src/main.c` | App state, menus, keyboard handling, readers and forms |
-| `src/calculator_view.inc` | Calculation rows and contextual additional results |
-| `src/revision_view.inc` | Scientific/mathematical typesetting within revision text |
-| `src/mathview.c`, `src/mathview.h` | Structured maths layout, drawing and input carets |
-| `src/cas.c`, `src/cas.h` | Numerical/symbolic engine and calculation results |
-| `src/topics.c`, `src/topics.h` | Course catalogue structure and maths topics |
-| `src/aqa_catalog.inc`, `src/maths_details.inc` | Science notes and extended maths examples |
-| `src/physics.c`, `src/chemistry.c`, `src/physics.h` | Equation definitions, variables, solver formulas and fact-sheet data |
-| `src/units.c`, `src/units.h` | Unit groups, conversions and quantity parsing |
-| `src/solvers.c`, `src/solvers.h` | Additional triangle and formula-rearrangement tools |
-| `src/search.inc`, `src/reuse.inc` | Topic/equation search and reopening saved tool inputs |
-| `src/sessions.inc`, `src/scriptstore.c`, `src/scriptstore.h` | Session serialisation and supported Epsilon Python-store access |
-| `src/ascii_font.inc`, `src/icon.png` | Bundled font data and app icon |
+| [`src/app/`](src/app/) | App entry point, state, menus, keyboard handling, search, session serialisation and History reuse |
+| [`src/calculation/`](src/calculation/) | Numerical and symbolic calculations, triangle solving and formula rearrangement |
+| [`src/courses/`](src/courses/) | Course catalogue, AQA science notes and maths worked examples |
+| [`src/science/`](src/science/) | Physics and Chemistry equation sheets, solver working, quantity parsing and unit conversions |
+| [`src/ui/`](src/ui/) | Calculation and revision views, structured maths layout and cursor rendering |
+| [`src/platform/`](src/platform/) | Access to the Epsilon Python script store on supported firmware |
+| [`src/assets/`](src/assets/) | Bundled font data and app icon |
+
+Start with [`src/app/main.c`](src/app/main.c) to trace a key press through the menu or calculator. The `.inc` files are included by their owning C files. For example, `main.c` includes the views that use its app state, and `topics.c` includes the course data.
 
 Local `.nwa` files are kept in `releases/` and ignored by Git, along with objects and test ELFs. Downloadable `.nwa` files are distributed as GitHub Release assets. Local queues, research, assistant instructions and validation tools remain ignored; this README is the public-documentation exception.
 

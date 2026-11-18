@@ -1,10 +1,10 @@
 #include "eadk.h"
-#include "topics.h"
-#include "physics.h"
-#include "units.h"
-#include "solvers.h"
-#include "mathview.h"
-#include "scriptstore.h"
+#include "courses/topics.h"
+#include "science/physics.h"
+#include "science/units.h"
+#include "calculation/solvers.h"
+#include "ui/mathview.h"
+#include "platform/scriptstore.h"
 
 #include <ctype.h>
 #include <math.h>
@@ -12,7 +12,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "ascii_font.inc"
+#include "assets/ascii_font.inc"
 
 const char eadk_app_name[] __attribute__((section(".rodata.eadk_app_name"))) = "NumAI";
 const uint32_t eadk_api_level __attribute__((section(".rodata.eadk_api_level"))) = 0;
@@ -407,7 +407,7 @@ static void wrap(const char *text, int width, bool highlight, int *count) {
     }
 }
 
-#include "revision_view.inc"
+#include "ui/revision_view.inc"
 
 static int selection_start(const Field *field) {
     return field->cursor < field->anchor ? field->cursor : field->anchor;
@@ -998,7 +998,7 @@ static void draw_tool(void) {
     footer("UP/DOWN: field   EXE: solve   BACK");
 }
 
-#include "calculator_view.inc"
+#include "ui/calculator_view.inc"
 
 static void draw(void) {
     eadk_display_push_rect_uniform(eadk_screen_rect, White);

@@ -39,4 +39,9 @@ secrets*.json
 *.md
 !/README.md
 /docs/
+/research/
+/tests/
 /tools/
+/verification/
+/releases/
+/local/

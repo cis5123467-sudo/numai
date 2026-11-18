@@ -1,6 +1,6 @@
 #ifndef NUMAI_TOPICS_H
 #define NUMAI_TOPICS_H
-#include "cas.h"
+#include "calculation/cas.h"
 
 #define MAX_FIELDS 4
 #define EXTRA_EXAMPLES 2
