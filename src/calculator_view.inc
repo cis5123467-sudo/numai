@@ -1,7 +1,7 @@
 /* The editor remains text-backed. The history and complete draft expressions
  * are laid out as two-dimensional maths while preserving the stored input. */
 enum { CalcInputColumn, CalcExactColumn, CalcDecimalColumn, CalcDotsColumn };
-enum { CalcTop=21, CalcBottom=225 };
+enum { CalcTop=21, CalcBottom=240 };
 
 static void math_text(int x,int y,const char *text,uint16_t ink,uint16_t paper,bool small) {
     if (!small) { string_at(x,y,text,ink,paper); return; }
@@ -182,7 +182,7 @@ static void draw_calculator(void) {
     home_header();
     bool selecting=page==CalcHistory || page==CalcExtras;
     int edit_height=selecting ? 30 : expression_height(&prompt,312,70,true);
-    int editor=CalcBottom-edit_height;
+    int editor=CalcBottom-edit_height-(pin_notice?15:0);
     rectangle(0,CalcTop,320,editor-CalcTop,HistoryTint);
     if (calc_count) {
         if (!selecting) calc_first=0;
@@ -206,7 +206,7 @@ static void draw_calculator(void) {
     rectangle(0,editor,320,1,Line);
     if (!selecting) expression_entry(4,editor+1,312,edit_height-2,&prompt,"Type a calculation",true,true);
     else clipped(8,editor+7,prompt.text,TEXT_WIDTH,Grey,White);
-    footer(selecting?"UP/DOWN: row   LEFT/RIGHT: item   OK":"TOOLBOX: courses   VAR: CAS   EXE");
+    if (pin_notice) footer(pin_notice);
 }
 
 static void add_extra(const char *label,const char *text,const char *reuse) {

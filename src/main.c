@@ -250,7 +250,14 @@ static void string_at(int x, int y, const char *text, eadk_color_t ink, eadk_col
         "cathode", "anode", "electrolysis", "salt", "hydrogen", "oxygen", "carbon dioxide",
         "reactivity", "displacement", "neutralisation", "alkali", "base", "acid",
         "OIL RIG", "ionises", "concordant", "titration", "filtrate", "crystals",
-        "cryolite", "halide", "higher only", "Key Ideas", "Oxidation Is Loss", "Reduction Is Gain"
+        "cryolite", "halide", "higher only", "Key Ideas", "Oxidation Is Loss", "Reduction Is Gain",
+        "energy", "kinetic", "gravitational", "elastic", "efficiency", "power", "temperature",
+        "internal energy", "specific heat capacity", "latent heat", "current", "resistance",
+        "potential difference", "series", "parallel", "alpha", "beta", "gamma", "isotopes",
+        "ionisation", "contamination", "irradiation", "background", "resultant", "acceleration",
+        "velocity", "displacement", "frequency", "wavelength", "amplitude", "fusion", "fission",
+        "Worked example", "Worked examples", "Exam check", "Required practical", "Practical",
+        "Transfer pathways", "Heating curves", "Compare properties", "Transformer power"
     };
     const char *at = text;
     while (*at && x < EADK_SCREEN_WIDTH) {
@@ -558,7 +565,7 @@ static Operation cas_menu_operation(int row) {
 
 static const char *selection_text(Page menu, int i) {
     switch (menu) {
-        case Toolbox: return i == 0 ? "Favourites" : i == course_count + 1 ? "Search topics" : courses[i - 1].title;
+        case Toolbox: return i == 0 ? "Favourites" : i == 1 ? "Search topics" : courses[i - 2].title;
         case RelatedEquations: return match_title(&related_matches[i]);
         case GeneralMenu: return general_items[i];
         case SessionList: {
@@ -672,6 +679,20 @@ static Selection *selection_for(Page menu) {
     }
 }
 
+static void unit_text(int x, int mid, const char *text, eadk_color_t ink, eadk_color_t paper) {
+    MathCanvas canvas = {math_text, rectangle, ink, paper};
+    while (*text && x < 300) {
+        if (*text == ' ') { x += CHAR_WIDTH; text++; continue; }
+        const char *end = text + strcspn(text, " ");
+        char formula[128];
+        format_formula(text, end, false, true, formula, sizeof(formula));
+        MathBox box = measure_math(formula, 300 - x);
+        paint_math(formula, 300 - x, x, mid, &canvas);
+        x += box.width;
+        text = end;
+    }
+}
+
 static void draw_list(const char *title, const char *tag, bool filled) {
     const int rows = 9, y0 = 25, row_height = 21;
     Selection *s = selection_for(page);
@@ -690,7 +711,9 @@ static void draw_list(const char *title, const char *tag, bool filled) {
             static const eadk_color_t stripes[] = {Blue, 0x5ca9, 0x9275, 0xc369, 0x46b1, 0x6b96};
             rectangle(4, y + 1, 3, 18, stripes[i % (sizeof(stripes) / sizeof(*stripes))]);
         }
-        title_with_tier(21, y + 3, selection_text(page, i), 41, active ? Blue : Ink, paper);
+        if (page == UnitFrom || page == UnitTo)
+            unit_text(21, y + 10, selection_text(page, i), active ? Blue : Ink, paper);
+        else title_with_tier(21, y + 3, selection_text(page, i), 41, active ? Blue : Ink, paper);
     }
 
     if (page == SessionList)
@@ -906,11 +929,11 @@ static void draw_science_result(void) {
 
 static void draw_unit_conversion(void) {
     const Unit *units = selected_unit_group()->units;
-    char title[60];
-    snprintf(title, sizeof(title), "%s to %s", units[unit_from.row].symbol, units[unit_to.row].symbol);
     header("Unit conversions", NULL, true);
     clipped(8, 30, selected_unit_group()->name, TEXT_WIDTH, Ink, White);
-    clipped(8, 48, title, TEXT_WIDTH, Blue, White);
+    unit_text(8, 55, units[unit_from.row].symbol, Blue, White);
+    string_at(137, 48, "to", Grey, White);
+    unit_text(170, 55, units[unit_to.row].symbol, Blue, White);
     if (page == UnitValue) {
         int height = expression_height(&unit_input, 306, 66, false);
         expression_entry(7, 74, 306, height, &unit_input, "Enter a number or expression", true, false);
@@ -1543,12 +1566,12 @@ static void back(void) {
 static void choose(void) {
     switch (page) {
         case Toolbox:
-            if (course_list_selection.row == course_count + 1) { begin_search(false); break; }
+            if (course_list_selection.row == 1) { begin_search(false); break; }
             if (!course_list_selection.row) {
                 open_favourites(CoursePins, Toolbox);
                 break;
             }
-            course_selection = (Selection){course_list_selection.row - 1, 0};
+            course_selection = (Selection){course_list_selection.row - 2, 0};
             chapter_selection = (Selection){0};
             page = Chapters;
             break;
