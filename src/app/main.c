@@ -1,6 +1,7 @@
 #include "eadk.h"
 #include "courses/topics.h"
 #include "science/physics.h"
+#include "science/organic.h"
 #include "science/units.h"
 #include "calculation/solvers.h"
 #include "ui/mathview.h"
@@ -35,11 +36,12 @@ typedef enum { Prompt, Toolbox, Chapters, Topics, TopicMenu, Examples, Form, Rea
                PhysicsSubjects, PhysicsForm, ScienceResult,
                UnitGroups, UnitFrom, UnitTo, UnitValue, UnitResult, Favourites,
                ToolForm, ToolOutput, DecimalPlaces, CalcHistory, CalcExtras,
-               GeneralMenu, EquationFavourites, SessionName, SessionList, About, HistoryResult, Search, RelatedEquations } Page;
+               GeneralMenu, EquationFavourites, SessionName, SessionList, About, HistoryResult, Search, RelatedEquations,
+               OrganicFamilies, OrganicList, OrganicDetail } Page;
 typedef enum { CoursePins, PhysicsPins, ChemistryPins } FavouriteGroup;
 typedef enum { MenuCourses, MenuEquations, MenuNewSession, MenuOpenSession,
                MenuHistory, MenuShortcuts, MenuPreferences, MenuAbout, GeneralCount } GeneralItem;
-enum { CasFavourites, CasPhysics, CasChemistry, CasUnits, CasRearrange, CasOperationStart,
+enum { CasFavourites, CasPhysics, CasChemistry, CasOrganic, CasUnits, CasRearrange, CasOperationStart,
        CasTrig = CasOperationStart + OperationCount - 1, CasTriangle, CasSearch, CasCount };
 static const char *const general_items[GeneralCount] = {
     "Courses", "Equations and CAS", "New Session", "Open Session",
@@ -93,6 +95,7 @@ static Selection general_selection, equation_favourite_selection, session_select
 static Selection course_selection, chapter_selection, topic_selection, topic_action, cas_selection, settings_selection;
 static Selection history_selection, example_selection, physics_selection, physics_subject;
 static Selection unit_group, unit_from, unit_to;
+static Selection organic_family, organic_choice;
 
 static Selection favourite_selection, decimal_selection, physics_list_selection;
 static FavouriteGroup favourite_group;
@@ -257,7 +260,12 @@ static void string_at(int x, int y, const char *text, eadk_color_t ink, eadk_col
         "ionisation", "contamination", "irradiation", "background", "resultant", "acceleration",
         "velocity", "displacement", "frequency", "wavelength", "amplitude", "fusion", "fission",
         "Worked example", "Worked examples", "Exam check", "Required practical", "Practical",
-        "Transfer pathways", "Heating curves", "Compare properties", "Transformer power"
+        "Transfer pathways", "Heating curves", "Compare properties", "Transformer power",
+        "Diffusion", "Osmosis", "Active transport", "Enzymes", "Villi", "Transpiration",
+        "Vaccination", "Photosynthesis", "Aerobic respiration", "Homeostasis", "Synapses",
+        "Meiosis", "Natural selection", "Biodiversity", "Ionic bonding", "Covalent bonding",
+        "Activation energy", "Equilibrium", "Displayed formula", "Alkanes", "Alkenes",
+        "Fractional distillation", "Carbon footprint", "Potable water"
     };
     const char *at = text;
     while (*at && x < EADK_SCREEN_WIDTH) {
@@ -407,6 +415,8 @@ static void wrap(const char *text, int width, bool highlight, int *count) {
     }
 }
 
+static void math_text(int x, int y, const char *text, uint16_t ink, uint16_t paper, bool small);
+#include "ui/organic_view.inc"
 #include "ui/revision_view.inc"
 
 static int selection_start(const Field *field) {
@@ -566,6 +576,8 @@ static Operation cas_menu_operation(int row) {
 static const char *selection_text(Page menu, int i) {
     switch (menu) {
         case Toolbox: return i == 0 ? "Favourites" : i == 1 ? "Search topics" : courses[i - 2].title;
+        case OrganicFamilies: return organic_families[i].name;
+        case OrganicList: return organic_molecules[organic_families[organic_family.row].first + i].name;
         case RelatedEquations: return match_title(&related_matches[i]);
         case GeneralMenu: return general_items[i];
         case SessionList: {
@@ -588,6 +600,7 @@ static const char *selection_text(Page menu, int i) {
             if (i == CasFavourites) return "Favourites";
             if (i == CasPhysics) return physics_sheet_title;
             if (i == CasChemistry) return chemistry_sheet_title;
+            if (i == CasOrganic) return "Displayed Formulae";
             if (i == CasUnits) return "Unit conversions";
             if (i == CasRearrange) return extra_tool_names[PhysicsRearrange];
             if (i == CasTrig) return extra_tool_names[TrigSolver];
@@ -624,6 +637,8 @@ static const char *selection_text(Page menu, int i) {
 static int count_for(Page menu) {
     switch (menu) {
         case Toolbox: return course_count + 2;
+        case OrganicFamilies: return organic_family_count;
+        case OrganicList: return organic_families[organic_family.row].count;
         case RelatedEquations: return related_count;
         case Chapters: return course()->count;
         case Topics: return chapter()->count;
@@ -657,6 +672,8 @@ static int count_for(Page menu) {
 static Selection *selection_for(Page menu) {
     switch (menu) {
         case Toolbox: return &course_list_selection;
+        case OrganicFamilies: return &organic_family;
+        case OrganicList: return &organic_choice;
         case RelatedEquations: return &related_selection;
         case GeneralMenu: return &general_selection;
         case SessionList: return &session_selection;
@@ -693,24 +710,57 @@ static void unit_text(int x, int mid, const char *text, eadk_color_t ink, eadk_c
     }
 }
 
+/* Shortcut groups are fixed by row number, independent of the viewport.
+ * 0 cycles groups in long lists. Arrow navigation also crosses groups. */
+enum { MenuShortcutCount = 35 };
+
+static int shortcut_group_start(int row) {
+    return row / MenuShortcutCount * MenuShortcutCount;
+}
+
+static int shortcut_group_end(int row, int count) {
+    int end = shortcut_group_start(row) + MenuShortcutCount;
+    return end < count ? end : count;
+}
+
+static void draw_menu_label(int row, int x, int y, eadk_color_t ink, eadk_color_t paper) {
+    int index = row % MenuShortcutCount;
+    char label[] = {(char)(index < 9 ? '1' + index : 'A' + index - 9), 0};
+    draw_text(x, y, label, ink, paper, true);
+}
+
+static void menu_footer(const char *label, int count, int row) {
+    if (count <= MenuShortcutCount) {
+        footer(label);
+        return;
+    }
+    char hint[64];
+    snprintf(hint, sizeof(hint), "0: next group (%d/%d)   OK   BACK",
+             row / MenuShortcutCount + 1, (count - 1) / MenuShortcutCount + 1);
+    footer(hint);
+}
+
 static void draw_list(const char *title, const char *tag, bool filled) {
     const int rows = 9, y0 = 25, row_height = 21;
     Selection *s = selection_for(page);
     int count = count_for(page);
     header(title, tag, filled);
+    int group_start = shortcut_group_start(s->row);
+    int group_end = shortcut_group_end(s->row, count);
+    if (s->first < group_start) s->first = group_start;
     if (s->row < s->first) s->first = s->row;
     if (s->row >= s->first + rows) s->first = s->row - rows + 1;
-    for (int row = 0; row < rows && s->first + row < count; row++) {
+    for (int row = 0; row < rows && s->first + row < group_end; row++) {
         int i = s->first + row, y = y0 + row * row_height;
         bool active = s->row == i;
         eadk_color_t paper = active ? PaleGold : White;
         if (active) {
             rectangle(4, y, 311, 20, paper);
-            string_at(8, y + 3, ">", Blue, paper);
         } else if (page == Toolbox) {
             static const eadk_color_t stripes[] = {Blue, 0x5ca9, 0x9275, 0xc369, 0x46b1, 0x6b96};
             rectangle(4, y + 1, 3, 18, stripes[i % (sizeof(stripes) / sizeof(*stripes))]);
         }
+        draw_menu_label(i, 8, y + 3, active ? Blue : Grey, paper);
         if (page == UnitFrom || page == UnitTo)
             unit_text(21, y + 10, selection_text(page, i), active ? Blue : Ink, paper);
         else title_with_tier(21, y + 3, selection_text(page, i), 41, active ? Blue : Ink, paper);
@@ -722,12 +772,12 @@ static void draw_list(const char *title, const char *tag, bool filled) {
     if (!count) string_at(8, 36, page == Favourites ?
                           "No favourites yet. Pin with Shift+VAR." : "No saved calculations yet.", Grey, White);
     scrollbar(s->first, count, rows, y0, row_height * rows);
-    footer(page == Toolbox ? "TOOLBOX: search   OK: open   BACK" :
+    menu_footer(page == Toolbox ? "TOOLBOX: search   OK: open   BACK" :
            page == CasMenu ? "VAR: search equations   OK   BACK" :
            page == Settings ? "OK: change   BACK: return" :
            page == Favourites ? "OK: open   SHIFT+VAR: unpin   BACK" :
            page == Topics || page == TopicMenu ? "OK: open   SHIFT+VAR: pin   BACK" :
-           "OK: choose   UP/DOWN: move   BACK");
+           "OK: choose   UP/DOWN: move   BACK", count, s->row);
 }
 
 static const struct { const char *key; const char *function; } shortcuts[] = {
@@ -736,6 +786,8 @@ static const struct { const char *key; const char *function; } shortcuts[] = {
     {"SHIFT+EXE", "Open or close NumAI menu"},
     {"OK / EXE", "Open item or calculate"},
     {"UP / DOWN", "Move, scroll or change field"},
+    {"1-9 / ALPHA", "Open numbered / lettered item"},
+    {"0 in long list", "Next shortcut group"},
     {"BACK / HOME", "Go back / return to launcher"},
     {"x,n,t", "Enter x"},
     {"SHIFT+pi", "Enter ="},
@@ -798,18 +850,21 @@ static void draw_physics_list(void) {
     Selection *sel = &physics_list_selection;
     int count = count_for(PhysicsList);
     header(chemistry_sheet ? chemistry_sheet_title : physics_sheet_title, chemistry_sheet ? "8462" : "8463", false);
+    int group_start = shortcut_group_start(sel->row);
+    int group_end = shortcut_group_end(sel->row, count);
+    if (sel->first < group_start) sel->first = group_start;
     if (sel->row < sel->first) sel->first = sel->row;
     if (sel->row > sel->first + (sel->first == 0 ? 2 : 1)) sel->first = sel->row - 1;
     int shown = 0;
-    for (int row = sel->first, y = top; row < count; row++) {
+    for (int row = sel->first, y = top; row < group_end; row++) {
         int row_height = row == 0 ? favourite_height : height;
         if (y + row_height > FOOTER) break;
         bool active = row == sel->row;
         eadk_color_t paper = active ? PaleGold : White;
         if (active) {
             rectangle(4, y, 311, row_height - 1, paper);
-            string_at(8, y + 2, ">", Blue, paper);
         }
+        draw_menu_label(row, 8, y + 2, active ? Blue : Grey, paper);
         if (row == 0) {
             string_at(21, y + 2, "Favourite Equations", active ? Blue : Ink, paper);
         } else if (row == count - 1) {
@@ -832,7 +887,7 @@ static void draw_physics_list(void) {
         shown++;
     }
     scrollbar(sel->first, count, shown, top, FOOTER - top);
-    footer("VAR: search   SHIFT+VAR: favourite");
+    menu_footer("VAR: search   SHIFT+VAR: favourite", count, sel->row);
 }
 
 static void draw_physics_detail(void) {
@@ -1018,6 +1073,9 @@ static void draw(void) {
         case PhysicsSubjects: draw_list("Choose the unknown", NULL, false); break;
         case PhysicsForm: draw_physics_form(); break;
         case ScienceResult: draw_science_result(); break;
+        case OrganicFamilies: draw_list("Displayed Formulae", NULL, true); break;
+        case OrganicList: draw_list(organic_families[organic_family.row].name, NULL, false); break;
+        case OrganicDetail: draw_organic_detail(); break;
         case UnitGroups: draw_list("Unit conversions", NULL, true); break;
         case UnitFrom: draw_list("Convert from", NULL, false); break;
         case UnitTo: draw_list("Convert to", NULL, false); break;
@@ -1529,6 +1587,9 @@ static void back(void) {
             science_work.answer[0] = 0;
             page = PhysicsForm;
             break;
+        case OrganicFamilies: page = CasMenu; break;
+        case OrganicList: page = OrganicFamilies; break;
+        case OrganicDetail: page = OrganicList; break;
         case UnitGroups: page = CasMenu; break;
         case UnitFrom: page = UnitGroups; break;
         case UnitTo: page = UnitFrom; break;
@@ -1649,6 +1710,10 @@ static void choose(void) {
                     physics_list_selection = (Selection){0};
                     page = PhysicsList;
                     break;
+                case CasOrganic:
+                    organic_family = (Selection){0};
+                    page = OrganicFamilies;
+                    break;
                 case CasUnits:
                     unit_group = (Selection){0};
                     set_field(&unit_input, "", false);
@@ -1659,6 +1724,13 @@ static void choose(void) {
                 case CasTriangle: open_tool(TriangleSolver); break;
                 default: form_for(cas_menu_operation(cas_selection.row), NULL, CasMenu); break;
             }
+            break;
+        case OrganicFamilies:
+            organic_choice = (Selection){0};
+            page = OrganicList;
+            break;
+        case OrganicList:
+            page = OrganicDetail;
             break;
         case EquationFavourites:
             open_favourites(equation_favourite_selection.row == 0 ? PhysicsPins : ChemistryPins, EquationFavourites);
@@ -1944,6 +2016,36 @@ static void create_session(void) {
     session_autosave();
 }
 
+static int menu_shortcut(int key, bool shifted, bool alphabetic, char letter) {
+    if (alphabetic) {
+        int lower = tolower((unsigned char)letter);
+        return lower >= 'a' && lower <= 'z' ? 9 + lower - 'a' : -1;
+    }
+    const char *text = shifted ? NULL : key_text(key);
+    return text && text[0] >= '1' && text[0] <= '9' && !text[1] ? text[0] - '1' : -1;
+}
+
+static void open_organic_topic(void) {
+    const OrganicFamily *family = &organic_families[organic_family.row];
+    const char *section = organic_molecules[family->first + organic_choice.row].section;
+    size_t length = strlen(section);
+    for (int i = 0; i < course_count; i++) {
+        if (strcmp(courses[i].code, "8462")) continue;
+        for (int j = 0; j < courses[i].count; j++) {
+            const Chapter *chapter = &courses[i].chapters[j];
+            for (int k = 0; k < chapter->count; k++) {
+                const Topic *item = &chapter->topics[k];
+                if (strncmp(item->course, section, length) || item->course[length] != '\n') continue;
+                course_selection = (Selection){i,0};
+                chapter_selection = (Selection){j,0};
+                topic_selection = (Selection){k,0};
+                begin_read(item->title, item->course);
+                return;
+            }
+        }
+    }
+}
+
 static bool handle_key(int key, bool shifted, bool alphabetic) {
     pin_notice = NULL;
     if (key == eadk_key_ans && alphabetic) {
@@ -2037,6 +2139,24 @@ static bool handle_key(int key, bool shifted, bool alphabetic) {
         if (page == UnitValue) unit_input_error = false;
         return true;
     }
+    int shortcut = menu_shortcut(key, shifted, alphabetic, letter);
+    Selection *selection = selection_for(page);
+    if (selection) {
+        int count = count_for(page);
+        if (!shifted && !alphabetic && key == eadk_key_zero && count > MenuShortcutCount) {
+            int next = shortcut_group_start(selection->row) + MenuShortcutCount;
+            *selection = (Selection){next < count ? next : 0, next < count ? next : 0};
+            return true;
+        }
+        if (shortcut >= 0) {
+            int row = shortcut_group_start(selection->row) + shortcut;
+            if (row < count) {
+                selection->row = row;
+                choose();
+            }
+            return true;
+        }
+    }
     if (letter || (function && (key == eadk_key_var || key == eadk_key_toolbox))) return true;
 
     if (key == eadk_key_back) {
@@ -2069,9 +2189,11 @@ static bool handle_key(int key, bool shifted, bool alphabetic) {
         return true;
     }
     if (page == CalcExtras) {
+        if (shortcut >= 0 && shortcut < extras_count) extras_row = shortcut;
         if (key == eadk_key_up && extras_row>0) extras_row--;
         else if (key == eadk_key_down && extras_row+1<extras_count) extras_row++;
-        else if ((key==eadk_key_ok || key==eadk_key_exe) && *extra_results[extras_row].reuse) {
+        else if ((key==eadk_key_ok || key==eadk_key_exe ||
+                  (shortcut >= 0 && shortcut < extras_count)) && *extra_results[extras_row].reuse) {
             insert(&prompt,extra_results[extras_row].reuse);
             page=Prompt;
         }
@@ -2082,13 +2204,16 @@ static bool handle_key(int key, bool shifted, bool alphabetic) {
         else if (key == eadk_key_down && shortcuts_offset < SHORTCUT_COUNT - SHORTCUT_ROWS) shortcuts_offset++;
         return true;
     }
-    Selection *selection = selection_for(page);
     if (selection) {
         int count = count_for(page);
         if (key == eadk_key_up && selection->row > 0) selection->row--;
         else if (key == eadk_key_down && selection->row + 1 < count) selection->row++;
-        else if (key == eadk_key_ok || key == eadk_key_right || key == eadk_key_exe) choose();
+        else if (count && (key == eadk_key_ok || key == eadk_key_right || key == eadk_key_exe)) choose();
         else if (key == eadk_key_left) back();
+        return true;
+    }
+    if (page == OrganicDetail) {
+        if (key == eadk_key_ok || key == eadk_key_exe || key == eadk_key_toolbox) open_organic_topic();
         return true;
     }
     if (page == PhysicsDetail) {

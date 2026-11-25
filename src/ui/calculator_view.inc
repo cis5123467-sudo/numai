@@ -448,7 +448,8 @@ static void draw_calc_extras(void) {
             calculation_part(fraction,100,frac,48+(int)strlen(whole)*7+2,y+19,Ink,paper,false);
         } else if (box.above+box.below+2<h) calculation_part(row->text,225,box,48,mid,Ink,paper,false);
         else clipped(48,y+2,row->text,30,Ink,paper);
-        string_at(48,y+h-15,row->label,Grey,paper);
+        draw_menu_label(i,48,y+h-15,Grey,paper);
+        string_at(61,y+h-15,row->label,Grey,paper);
         rectangle(40,y+h-1,240,1,Line);
         y+=h;
         if (y>=bottom-1) break;

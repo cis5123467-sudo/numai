@@ -1,6 +1,6 @@
 CC = arm-none-eabi-gcc
 NWLINK ?= npx --yes -- nwlink@1.0.0
-VERSION ?= 0.1.3-r1
+VERSION ?= 0.1.4
 BUILD = build/$(VERSION)
 RELEASE_DIR = releases
 APP = $(RELEASE_DIR)/numai-$(VERSION).nwa
@@ -10,6 +10,7 @@ SOURCES = \
 	src/courses/topics.c \
 	src/science/physics.c \
 	src/science/chemistry.c \
+	src/science/organic.c \
 	src/science/units.c \
 	src/calculation/solvers.c \
 	src/ui/mathview.c \

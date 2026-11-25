@@ -2,13 +2,13 @@
 
 Revision notes, equation sheets, worked examples, scientific solvers and a CAS calculator in a native **320 × 240 NumWorks external app**. This is the **original NumAI project**; [NumAI for Casio](https://github.com/cis5123467-sudo/numai-casio) is its related Graph Math+ port.
 
-Current release: **v0.1.3-r1**. Target: **NumWorks N0120 running Epsilon 24.8.0**.
+Current release: **v0.1.4**. Target: **NumWorks N0120 running Epsilon 24.8.0**.
 
-[Download the latest release](https://github.com/cis5123467-sudo/numai/releases/latest) · [Download v0.1.3-r1](https://github.com/cis5123467-sudo/numai/releases/download/0.1.3-r1/numai-0.1.3-r1.nwa) · [Detailed release notes](https://github.com/cis5123467-sudo/numai/releases/tag/0.1.3-r1) · [Report an issue](https://github.com/cis5123467-sudo/numai/issues)
+[Download the latest release](https://github.com/cis5123467-sudo/numai/releases/latest) · [Download v0.1.4](https://github.com/cis5123467-sudo/numai/releases/download/0.1.4/numai-0.1.4.nwa) · [Detailed release notes](https://github.com/cis5123467-sudo/numai/releases/tag/0.1.4) · [Report an issue](https://github.com/cis5123467-sudo/numai/issues)
 
 ## Install
 
-1. Download **`numai-0.1.3-r1.nwa`** from GitHub Releases. Choose the `.nwa` asset rather than GitHub's automatic source-code archive.
+1. Download **`numai-0.1.4.nwa`** from GitHub Releases. Choose the `.nwa` asset rather than GitHub's automatic source-code archive.
 2. Connect the calculator by USB and open the [NumWorks external-app installer](https://my.numworks.com/apps) using your existing supported installation setup and a WebUSB-capable browser, such as desktop Chrome or Edge.
 3. Select the calculator, add the `.nwa` file and complete the installation.
 4. Open **NumAI** from the calculator's application menu. It starts directly in **CALCULATION**; use **TOOLBOX** for courses or **VAR** for equations and CAS.
@@ -43,6 +43,16 @@ The Courses menu begins with **Favourites**, then **Search topics**, then the si
 | AQA GCSE Chemistry — 8462 | Atomic structure, bonding, quantitative chemistry, chemical changes, energy changes, rates/equilibrium, organic chemistry, analysis, atmosphere and resources |
 
 Science notes include practical and scientific-skills material. **(higher only)** identifies Higher-tier entries; mixed-tier notes identify relevant Higher-only material within the text. The science course is the full separate-science course, so separate-only content remains available even where revision priorities focus on combined/Trilogy topics.
+
+### Key Ideas across AQA sciences
+
+All **34 section menus** in AQA Biology, Chemistry and Physics open with **Key Ideas**. This includes the required practicals and shared scientific skills. The summaries cover whole sections and call out important definitions, relationships, equations and common mistakes, with Higher-only and separate-science labels where relevant.
+
+### Displayed Formulae
+
+Press **VAR → Displayed Formulae**, directly below the Chemistry equation sheet, and choose a family. The library contains **18 compounds** across alkanes, alkenes, alcohols, carboxylic acids and esters. Each diagram shows the compound's molecular formula and every atom and bond. Compare butane with methylpropane to see how compounds with molecular formula C₄H₁₀ can differ in structure.
+
+Press **OK** or **TOOLBOX** on a formula to open its AQA Organic Chemistry notes. Relevant notes also show diagrams inline. Scroll down through the notes to see them.
 
 ### Physics Paper 1 revision in v0.1.3-r1
 
@@ -90,7 +100,7 @@ The calculation screen uses taller mathematical rows and the full available lowe
 
 ### Equations and CAS menu
 
-Press **VAR** to open **EQUATIONS AND CAS**. Its leading entries are Favourites, the Physics equation sheet, the Chemistry equation sheet, Unit conversions and the Physics formula rearranger. Maths/CAS tools follow, including:
+Press **VAR** to open **EQUATIONS AND CAS**. Its leading entries are Favourites, the Physics equation sheet, the Chemistry equation sheet, Displayed Formulae, Unit conversions and the Physics formula rearranger. Maths/CAS tools follow, including:
 
 | Tool | Purpose |
 | --- | --- |
@@ -162,6 +172,9 @@ Examples include **cm³ → dm³**, **cL → mL**, **g/cm³ → kg/m³**, **kWh 
 | **TOOLBOX on a fact sheet** | Open its related course topic |
 | **SHIFT + EXE** | Open/close the general NumAI menu |
 | **OK / EXE** | Open the selection or submit a calculation |
+| **1–9** in an option menu | Open the option with that number |
+| **ALPHA + letter** in an option menu | Open the option with that letter |
+| **0** in a long option menu | Cycle to the next shortcut group |
 | **UP / DOWN** | Navigate lists, scroll notes or change fields |
 | **UP from calculation input** | Select a previous calculation |
 | **LEFT / RIGHT on a calculation row** | Select input, available answer or additional-results button |
@@ -185,6 +198,8 @@ Examples include **cm³ → dm³**, **cL → mL**, **g/cm³ → kg/m³**, **kWh 
 | **ANS** | Insert the previous value |
 | **ALPHA + ANS** | Return to calculation home from any page |
 | **BACK / HOME** | Return to the previous page / exit to the calculator launcher |
+
+Menu shortcuts follow list order. The first nine items use **1–9**, followed by **A–Z**. In longer menus, **0** cycles groups of up to 35 options. Labels stay fixed while scrolling within a group. Arrow keys and OK/EXE also work, and calculation, search, session name and solver fields keep normal text entry.
 
 Shift/Alpha status appears in the header. The clipboard belongs to NumAI and is not a shared clipboard for other calculator apps. Angle mode defaults to **degrees**; radians are available in Preferences.
 
@@ -244,14 +259,14 @@ make build
 make check
 ```
 
-`make build` creates **`releases/numai-0.1.3-r1.nwa`** inside the repository. `make check` links a loader-oriented test ELF at **`build/0.1.3-r1/numai.elf`** using nwlink. It is a packaging/linking check, not an automated runtime test.
+`make build` creates **`releases/numai-0.1.4.nwa`** inside the repository. `make check` links a loader-oriented test ELF at **`build/0.1.4/numai.elf`** using nwlink. It is a packaging/linking check, not an automated runtime test.
 
 The Makefile pins **nwlink 1.0.0**, generates its EADK header through nwlink and targets **Cortex-M7**, Thumb instructions and hardware floating point. C99 sources compile with size optimisation and warnings treated as errors. Icon conversion is part of the build; no local research documents or test tools are needed to compile the app.
 
 Override the version for a separately named build:
 
 ```sh
-make check VERSION=0.1.3-r1-custom
+make check VERSION=0.1.4-custom
 ```
 
 This changes the artifact name, build directory and compiled version string. It does not install the app. Transfer the `.nwa` separately through your authorised calculator installation setup. `make clean` removes local build directories.
@@ -264,8 +279,8 @@ This changes the artifact name, build directory and compiled version string. It 
 | [`src/app/`](src/app/) | App entry point, state, menus, keyboard handling, search, session serialisation and History reuse |
 | [`src/calculation/`](src/calculation/) | Numerical and symbolic calculations, triangle solving and formula rearrangement |
 | [`src/courses/`](src/courses/) | Course catalogue, AQA science notes and maths worked examples |
-| [`src/science/`](src/science/) | Physics and Chemistry equation sheets, solver working, quantity parsing and unit conversions |
-| [`src/ui/`](src/ui/) | Calculation and revision views, structured maths layout and cursor rendering |
+| [`src/science/`](src/science/) | Physics and Chemistry equation sheets, solver working, unit conversions and organic molecule data |
+| [`src/ui/`](src/ui/) | Calculation and revision views, structured maths layout, cursor rendering and displayed formula diagrams |
 | [`src/platform/`](src/platform/) | Access to the Epsilon Python script store on supported firmware |
 | [`src/assets/`](src/assets/) | Bundled font data and app icon |
 
@@ -274,6 +289,8 @@ Start with [`src/app/main.c`](src/app/main.c) to trace a key press through the m
 Local `.nwa` files are kept in `releases/` and ignored by Git, along with objects and test ELFs. Downloadable `.nwa` files are distributed as GitHub Release assets. Local queues, research, assistant instructions and validation tools remain ignored; this README is the public-documentation exception.
 
 ## Validation and compatibility
+
+See the [v0.1.4 release notes](https://github.com/cis5123467-sudo/numai/releases/tag/0.1.4) for the current build’s emulator and package checks.
 
 v0.1.3 passed ARM package inspection and targeted runtime checks using a **Cortex-M7/Unicorn harness with simulated EADK keyboard/display calls**. The harness is local development tooling and is not included in this source-only repository; the commands above are sufficient to build the app without it.
 

@@ -2,11 +2,22 @@
  * H marks both whole Higher-only subsections and the Higher-only parts split
  * out of mixed-tier subsections. Foundation material stays in the S cards. */
 #define S(id, heading, notes) { .title = heading, .course = id "\n\nKey ideas\n- " notes, .example = SCIENCE_MORE }
+#define K(id, notes) { .title = "Key Ideas", .course = id "\n\n- " notes }
 #define H(id, title, notes) S(id, title " (higher only)", notes)
 
 #undef SCIENCE_MORE
 #define SCIENCE_MORE "\n\nUnderstand the mechanism\n- Explain structure and function together. A large surface area gives more membrane through which material can move; a short diffusion path reduces the distance travelled. Mitochondria supply energy through aerobic respiration, while ribosomes assemble proteins.\n\nApply your understanding\n- Microscope images show a two-dimensional section of a three-dimensional cell. Use the scale bar rather than the size of the printed image, keep image and actual size in matching units, and distinguish magnification from resolving detail."
 static const Topic bio_cells[] = {
+    K("4.1",
+      "Animal and plant cells keep their DNA in a nucleus. Bacteria are prokaryotes: their DNA is in the cytoplasm, usually as one circular chromosome, sometimes with plasmids."
+      "\n\n- The cell membrane controls movement in and out. Mitochondria are the main site of aerobic respiration, and ribosomes make proteins."
+      "\n\n- Plant cells have cellulose walls. A permanent vacuole helps support the cell, and chloroplasts in photosynthetic cells absorb light."
+      "\n\n- Specialised cells have features suited to their function. A root hair cell has a large area for absorption. A sperm cell has a tail and many mitochondria to support movement."
+      "\n\n- Magnification=image size/real size. Convert both lengths to the same unit first. Resolution is the ability to distinguish close points."
+      "\n\n- Before mitosis, DNA is copied. Chromosomes are separated so the two new cells usually have the same genes as the original."
+      "\n\n- Stem cells can divide and differentiate. Compare the possible benefit of replacing damaged cells with risks such as rejection."
+      "\n\n- Diffusion is net movement down a concentration gradient. Osmosis is water movement through a partially permeable membrane from a dilute solution towards a more concentrated one. Active transport moves substances against a concentration gradient using energy from respiration."
+      "\n\n- Exchange is faster with a larger surface area, steeper gradient and shorter diffusion distance. Large organisms need exchange surfaces and transport systems."),
     S("4.1.1.1", "Eukaryotes and prokaryotes", "Animal and plant cells contain DNA inside a nucleus. Bacteria are smaller, lack a nucleus and have a circular chromosome in the cytoplasm. They may also have plasmids."
       "\n\n- " "Compare where DNA is held, rather than saying bacteria lack DNA. Both cell types have a membrane, cytoplasm and ribosomes. Some bacteria also have a cell wall."),
     S("4.1.1.2", "Animal and plant cells", "Nucleus: genetic control. Cytoplasm: reaction site. Membrane: controls movement. Mitochondria: aerobic respiration. Ribosomes: protein synthesis. Plants also have a cellulose wall, a permanent vacuole and, in photosynthetic cells, chloroplasts."
@@ -38,6 +49,16 @@ static const Topic bio_cells[] = {
 #undef SCIENCE_MORE
 #define SCIENCE_MORE "\n\nUnderstand the mechanism\n- Follow substances through an organ system. Digested small molecules enter the blood and are delivered to cells; oxygen is absorbed at exchange surfaces and carried by haemoglobin. Cells use the supplied materials, while waste products must be removed.\n\nApply your understanding\n- Enzymes are specific because substrates fit their active sites. Temperature affects particle movement and collisions; very high temperatures change the active site's shape. Explain a change in rate using this mechanism and distinguish digestion from respiration."
 static const Topic bio_org[] = {
+    K("4.2",
+      "Cells form tissues, tissues form organs, and organs work together in systems. Explain each structure by linking it to a specific job."
+      "\n\n- Digestive enzymes break large molecules into smaller soluble ones. Amylase acts on starch; proteases act on proteins; lipases act on lipids."
+      "\n\n- Enzymes have active sites. Above the optimum temperature, or at unsuitable pH, the active site can change shape and the rate falls."
+      "\n\n- Bile is alkaline and neutralises stomach acid. It also emulsifies fat into droplets, increasing the surface area for lipase. Bile is not an enzyme."
+      "\n\n- Small intestine villi give a large area and short diffusion distance. Blood flow carries away absorbed molecules and helps maintain the gradient."
+      "\n\n- Blood goes from heart to lungs and back, then from heart to body and back. Arteries carry blood away from the heart. Veins carry it back."
+      "\n\n- Red blood cells carry oxygen, white blood cells defend against disease, platelets help clotting and plasma transports dissolved substances."
+      "\n\n- Coronary heart disease can reduce oxygen to heart muscle. Compare treatments by benefits, risks and whether they treat symptoms or their cause."
+      "\n\n- Xylem carries water and mineral ions from roots. Transpiration is water loss from leaves. Phloem moves dissolved sugars from sources to sinks."),
     S("4.2.1", "Levels of organisation", "Cells form tissues. Several tissues work together in an organ. Organs work together in systems. A leaf, for example, contains tissues for photosynthesis, support, transport and gas exchange."
       "\n\n- " "A tissue is a group of cells carrying out a function. Stomach muscle contracts, gland tissue secretes substances and epithelium lines the stomach; together they make an organ."),
     S("4.2.2.1", "Digestion and enzymes", "Carbohydrases break carbohydrate into simple sugars, proteases act on proteins and lipases release fatty acids and glycerol. Enzyme active sites fit their substrates. Heat or extreme pH can change that shape. Bile neutralises acid and emulsifies fats."
@@ -63,6 +84,16 @@ static const Topic bio_org[] = {
 #undef SCIENCE_MORE
 #define SCIENCE_MORE "\n\nUnderstand the mechanism\n- Separate the pathogen, route of transmission, symptoms and control measure. A control works by breaking part of the transmission route, reducing exposure or helping the immune system recognise an antigen.\n\nApply your understanding\n- Antibodies are specific to antigens. Memory cells help produce a faster response after a later exposure. Antibiotic resistance arises when resistant variants survive treatment and reproduce; individual bacteria do not choose to become resistant."
 static const Topic bio_infection[] = {
+    K("4.3",
+      "Pathogens can spread by air, water, direct contact or vectors. Match prevention to the route of transmission."
+      "\n\n- Bacteria can produce toxins; viruses reproduce inside host cells. Fungi and protists can also cause disease."
+      "\n\n- Measles is viral, salmonella food poisoning is bacterial, rose black spot is fungal and malaria is caused by a protist carried by mosquitoes."
+      "\n\n- Skin, mucus, cilia and stomach acid help stop pathogens entering tissues. White blood cells engulf pathogens, make antibodies or make antitoxins."
+      "\n\n- Antibodies are specific to antigens. After vaccination the immune system can respond more quickly on later exposure to that pathogen."
+      "\n\n- Antibiotics treat susceptible bacterial infections. Painkillers ease symptoms. Neither fact means antibiotics kill viruses."
+      "\n\n- Random variation can produce resistant bacteria. Antibiotic treatment selects resistant survivors, which reproduce. The patient's body does not become resistant."
+      "\n\n- Drug testing checks toxicity, efficacy and dose. In a double-blind trial neither patients nor the people assessing results know who received each treatment."
+      "\n\n- In separate Biology, monoclonal antibodies have one target specificity (higher only). Identify an application and consider false results or side effects.\n\n- Separate Biology: plant defence includes waxy barriers, chemicals and physical features. Use symptoms with evidence before identifying a plant disease."),
     S("4.3.1.1", "Communicable diseases", "Pathogens include bacteria, viruses, fungi and protists. They spread by contact, water, air or vectors. Hygiene, isolation, vaccination and controlling vectors reduce transmission."
       "\n\n- " "A vector carries a pathogen between hosts; it is not the pathogen itself. Match prevention to the route, for example clean water for waterborne transmission and hygiene for contact."),
     S("4.3.1.2", "Viral diseases", "Measles spreads in droplets and vaccination limits it. HIV attacks immune cells and can lead to AIDS if untreated. Tobacco mosaic virus causes mottling and reduces photosynthesis."
@@ -96,6 +127,16 @@ static const Topic bio_infection[] = {
 #undef SCIENCE_MORE
 #define SCIENCE_MORE "\n\nUnderstand the mechanism\n- Photosynthesis transfers energy from light into chemical stores. Respiration transfers energy for cellular processes. Plants respire continuously, and photosynthesis occurs only when suitable light is available; gas exchange depends on the relative rates of both processes.\n\nApply your understanding\n- For a limiting factor, explain why raising another factor cannot keep increasing the rate. Use the shape and axes of a graph, compare gradients or plateaus, and support a statement about rate with values from the graph."
 static const Topic bio_energy[] = {
+    K("4.4",
+      "Photosynthesis transfers light energy to chemical stores: carbon dioxide + water -> glucose + oxygen. Chlorophyll absorbs light."
+      "\n\n- Light intensity, carbon dioxide, temperature and chlorophyll can limit photosynthesis. Increasing a factor helps only while that factor limits the rate."
+      "\n\n- Pondweed investigations estimate rate from oxygen production. Compare equal times, repeat and control water temperature when moving the lamp."
+      "\n\n- Higher only: light intensity follows an inverse-square relationship for a point source. Doubling distance gives one quarter of the intensity."
+      "\n\n- Plants use glucose in respiration, make cellulose and lipids, store it as starch, or combine it with nitrate ions to make amino acids."
+      "\n\n- Aerobic respiration transfers energy from glucose using oxygen, producing carbon dioxide and water. It occurs in plants as well as animals."
+      "\n\n- Muscle anaerobic respiration produces lactic acid and releases less energy per glucose. Yeast fermentation produces ethanol and carbon dioxide."
+      "\n\n- Exercise increases heart and breathing rates so oxygen and glucose reach muscles faster. Higher only: explain oxygen debt and lactic acid transport to the liver."
+      "\n\n- Metabolism is the sum of a cell's reactions. It includes building molecules as well as breaking them down."),
     S("4.4.1.1", "Photosynthesis reaction", "Carbon dioxide + water -> glucose + oxygen using light energy absorbed by chlorophyll. Photosynthesis transfers energy into chemical stores and takes place in chloroplasts."
       "\n\n- " "Photosynthesis is endothermic. Write 6CO2 + 6H2O -> C6H12O6 + 6O2. Light is the energy source and chlorophyll absorbs it; neither is consumed as a reactant."),
     S("4.4.1.2", "Photosynthesis rate", "Low light, low carbon dioxide, low chlorophyll or unsuitable temperature can restrict photosynthesis. Raising a limiting factor increases rate until a different factor limits it."
@@ -117,6 +158,16 @@ static const Topic bio_energy[] = {
 #undef SCIENCE_MORE
 #define SCIENCE_MORE "\n\nUnderstand the mechanism\n- A control system includes receptors, a coordination centre and effectors. Receptors detect changes; a response reduces the original deviation in negative feedback. Explain the direction of each change rather than merely naming the hormone or organ.\n\nApply your understanding\n- Nervous responses use electrical impulses along neurones and chemical transmission across synapses. Hormones travel in blood to target organs. Relate the route, duration and specificity of the response to the particular example."
 static const Topic bio_control[] = {
+    K("4.5",
+      "Homeostasis keeps internal conditions within useful limits, including temperature, glucose and water balance. Receptors detect changes; coordination centres process information; effectors respond."
+      "\n\n- Nervous signals travel along neurones. A reflex follows receptor, sensory neurone, relay neurone, motor neurone and effector. Chemical signals cross synapses."
+      "\n\n- Hormones travel in the blood and act on target organs. Nervous responses are often faster and shorter lived."
+      "\n\n- Blood glucose rises after a meal. Insulin promotes glucose uptake and storage as glycogen. Higher only: glucagon helps raise low blood glucose."
+      "\n\n- Type 1 diabetes involves insufficient insulin. In type 2, cells respond less effectively to insulin. Compare management based on the underlying problem."
+      "\n\n- Separate Biology: sweating and increased blood flow near the skin increase heat loss. Shivering transfers more energy to the body when cold."
+      "\n\n- Separate Biology: kidneys filter blood and selectively reabsorb useful substances. Higher only: more ADH makes collecting ducts reabsorb more water, producing more concentrated urine."
+      "\n\n- FSH supports egg maturation; LH triggers ovulation; oestrogen rebuilds the uterus lining; progesterone maintains it. Higher only: explain their feedback interactions."
+      "\n\n- Separate Biology Higher: plant hormones such as auxin help explain responses to light and gravity. Distinguish differential growth from a plant physically moving its roots.\n\n- Separate Biology: link brain regions to functions, such as coordination in the cerebellum. In the eye, the pupil changes size and the lens changes shape to focus images on the retina.\n\n- Higher only: evaluate how changing hormone levels can prevent pregnancy or help treat infertility. Use success rates and risks when comparing choices."),
     S("4.5.1", "Homeostasis", "Internal conditions such as body temperature, water level and blood glucose are kept within suitable ranges. Receptors detect changes, coordination centres process information and effectors respond."
       "\n\n- " "Think stimulus -> receptor -> coordination centre -> effector -> response. Internal conditions are regulated around a range so enzymes and cells can function well."),
     S("4.5.2.1", "Neurones, synapses and reflexes", "A receptor detects a stimulus. Sensory, relay and motor neurones carry impulses towards an effector. Chemicals cross synapses. Reflexes are rapid automatic responses; a reaction-time test measures time from stimulus to response."
@@ -162,6 +213,16 @@ static const Topic bio_control[] = {
 #undef SCIENCE_MORE
 #define SCIENCE_MORE "\n\nUnderstand the mechanism\n- Use gene, allele and chromosome precisely. An allele is a variant of a gene. Genotype describes the alleles present; phenotype is the expressed characteristic, which can also be affected by environmental conditions.\n\nApply your understanding\n- A genetic probability describes each independent offspring and does not guarantee a fixed ratio in a small family. State parent genotypes, show the gametes, combine alleles systematically and translate the possible genotypes into phenotypes."
 static const Topic bio_genetics[] = {
+    K("4.6",
+      "DNA carries genetic information. A gene is a section of DNA that codes for a protein. Alleles are different versions of a gene."
+      "\n\n- A genotype is the combination of alleles; a phenotype is an observable characteristic. Environment can also influence phenotype."
+      "\n\n- Meiosis produces gametes with half the chromosome number. Fertilisation restores the full number and combines alleles from two parents."
+      "\n\n- Use a Punnett square to predict probabilities. A 1 in 4 chance is for each offspring independently. A dominant allele is expressed with one copy and is not necessarily common."
+      "\n\n- Cystic fibrosis is recessive; polydactyly is often used as a dominant example. Use the stated alleles and trace both parents before assigning risk."
+      "\n\n- Mutations produce genetic variation. Natural selection means individuals with advantageous characteristics are more likely to reproduce and pass on their alleles."
+      "\n\n- Selective breeding chooses parents with desired traits. Genetic engineering changes DNA. Consider both benefits and risks when comparing them."
+      "\n\n- Fossils, antibiotic resistance and similarities in DNA help provide evidence about evolution. Extinction means no individuals of a species remain."
+      "\n\n- Separate Biology Higher: modelling gene expression or explaining speciation needs the intermediate steps. In speciation, separated populations diverge until they can no longer interbreed successfully."),
     S("4.6.1.1", "Sexual and asexual reproduction", "Sexual reproduction combines gametes and produces genetic variation. Asexual reproduction uses one parent and mitosis, producing genetically identical offspring except for mutations."
       "\n\n- " "Identical asexual offspring are clones apart from new mutations. Gametes from two parents combine alleles into new genotypes during sexual reproduction."),
     S("4.6.1.2", "Meiosis", "DNA copies once and the cell divides twice. Four genetically different gametes form, each with half the usual chromosome number. Fertilisation restores paired chromosomes."
@@ -215,6 +276,15 @@ static const Topic bio_genetics[] = {
 #undef SCIENCE_MORE
 #define SCIENCE_MORE "\n\nUnderstand the mechanism\n- A change to one population can affect others through food supply, predation or competition. Trace a specific link in the food web and consider both biotic and abiotic factors before predicting the direction of a population change.\n\nApply your understanding\n- Sampling estimates populations. Place quadrats randomly when comparing abundance, or use a transect to investigate a gradient. Repeat samples and calculate a mean, use consistent area units, and explain how the sample represents the whole habitat."
 static const Topic bio_ecology[] = {
+    K("4.7",
+      "A population is one species in an area. A community is all the populations there. An ecosystem also includes the physical environment."
+      "\n\n- Abiotic factors include temperature, water and light. Biotic factors include competition, predators and disease. An adaptation can be structural, behavioural or functional."
+      "\n\n- Use random quadrats for an unbiased abundance estimate. Place quadrats at regular intervals along a transect to investigate change across a gradient."
+      "\n\n- Food-chain arrows show transfer from food to consumer. Less biomass is available at higher levels because some food is not eaten or absorbed and respiration transfers energy."
+      "\n\n- Carbon moves through photosynthesis, feeding, respiration, decay and combustion. Water moves through evaporation, condensation, precipitation and uptake."
+      "\n\n- Decomposers recycle substances. Decay is faster in suitable warmth and moisture when other needs, such as oxygen for aerobic decomposers, are met."
+      "\n\n- Biodiversity means variety of living organisms. Land use, pollution and climate change can reduce it. Compare practical conservation actions and how to measure success."
+      "\n\n- Separate Biology: compare the impact of food production methods on energy transfers, resources and biodiversity. An efficient method also has costs and welfare considerations.\n\n- Separate Biology: pyramids of biomass show dry mass at each trophic level. Higher only: transfer efficiency is biomass passed on divided by biomass available, times 100."),
     S("4.7.1.1", "Communities and competition", "Individuals of one species form populations; interacting populations form communities. Plants compete for light, space, water and minerals. Animals compete for territory, mates and food. In stable communities populations are broadly balanced."
       "\n\n- " "Interdependence means a change in one population can affect others. Removing a key food species can reduce predator numbers even if habitat stays suitable."),
     S("4.7.1.2", "Abiotic factors", "Non-living factors include temperature, light, moisture, soil pH and minerals, wind, carbon dioxide and oxygen. Explain distributions by linking the factor to a process or survival."
@@ -262,13 +332,27 @@ static const Topic bio_ecology[] = {
 #undef SCIENCE_MORE
 #define SCIENCE_MORE "\n\nUnderstand the mechanism\n- Link explanations across levels of organisation, from molecules and cells to organs and populations. A change in a cell process can affect an organism's function, which can then affect interactions with other organisms.\n\nApply your understanding\n- Use evidence to distinguish a description from an explanation. A description states the observed change; an explanation links that change to a biological process such as diffusion, enzyme action, reproduction or natural selection."
 static const Topic bio_key[] = {
-    S("4.8", "Biology key ideas", "Relate structure to function, processes to energy transfer, and response to changing conditions. DNA controls inherited characteristics; selection changes populations. Organisms interact with their environment and cycle materials."
-      "\n\n- " "Use a cause-and-effect chain in explanations: structure or change, process affected, then outcome. Link molecular, cellular and whole-organism levels as appropriate.")
+    K("4.8",
+      "Structure and function connect at every scale. Root hair cells, villi and alveoli use a large surface area for exchange."
+      "\n\n- Organisms need energy from respiration. Photosynthesis builds glucose in plants, which still respire both day and night."
+      "\n\n- Cells coordinate actions with fast nervous signals and hormones carried in blood. Negative feedback brings a condition back towards its normal range."
+      "\n\n- DNA information helps specify proteins. Inheritance passes alleles to offspring; variation allows populations to evolve over generations."
+      "\n\n- Materials cycle through ecosystems. Energy transfers through food chains, with less available for each successive trophic level."
+      "\n\n- When explaining a pattern, name the cause, the change it produces and the effect that follows. Use data with units to support a conclusion.")
 };
 
 #undef SCIENCE_MORE
 #define SCIENCE_MORE "\n\nUnderstand the mechanism\n- State the independent variable, the dependent variable and how each control variable is maintained. Give apparatus and measurements clearly enough for another student to repeat the method, including a suitable range and intervals.\n\nApply your understanding\n- Record repeats with units, identify anomalies using evidence and calculate a mean where appropriate. For biological samples, variation between organisms can be substantial, so use enough specimens and standardise their size, age or starting condition."
 static const Topic bio_practicals[] = {
+    K("RP",
+      "Microscopy: record the scale and convert units before finding magnification. Use a clear drawing with labels."
+      "\n\n- Osmosis: vary sugar concentration, keep potato pieces comparable and blot them before weighing. Percentage mass change uses initial mass as the denominator."
+      "\n\n- Food tests: compare colour changes to the starting colour. Use separate samples and keep any heating conditions the same."
+      "\n\n- Enzymes: change one factor, measure the time for a defined endpoint and use 1/time as a rate estimate under matched conditions."
+      "\n\n- Photosynthesis: change light intensity, estimate oxygen produced in a fixed time, and control temperature and carbon dioxide."
+      "\n\n- Reaction time: repeat the measurement under both conditions and minimise anticipation. Compare means and spread."
+      "\n\n- Fieldwork: use random quadrats for abundance and a transect for gradients. Keep quadrat area and sampling intervals consistent."
+      "\n\n- Separate Biology practicals also include comparing clear areas around antimicrobial discs, measuring light effects on seedlings and monitoring pH during decay. Identify the independent variable, measurement and control in each."),
     S("RP1", "Microscopy", "Prepare a clear thin specimen. Identify and label structures in a biological drawing. Report magnification and calculate actual size using matching units."
       "\n\n- " "Use a sharp pencil, plain outlines and straight labels touching structures. A scale bar remains meaningful if the diagram is subsequently enlarged or reduced."),
     S("RP2", "Antimicrobials and growth", "Compare the clear zones in a supervised antimicrobial investigation. Include a control and compare areas, not just diameters. Explain why asepsis and school-lab incubation limits matter."
@@ -397,7 +481,7 @@ static const Topic phys_forces[] = {
 #undef SCIENCE_MORE
 #define SCIENCE_MORE "\n\nUnderstand the mechanism\n- A wave transfers energy without a net transfer of matter. Wavelength is a spatial separation between corresponding points, while period is the time for one cycle. Frequency counts complete cycles per second.\n\nApply your understanding\n- At a boundary the source fixes frequency. A change in wave speed changes wavelength, and refraction can change direction. On diagrams, measure angles to the normal and label the incident, reflected or refracted ray."
 static const Topic phys_waves[] = {
-    S("4.6", "Key Ideas", "Waves transfer energy without net transport of matter. Transverse vibrations are perpendicular to travel; longitudinal ones are parallel.\n\n- Amplitude is maximum displacement, not crest-to-trough height. Wavelength joins corresponding adjacent points. Frequency is cycles per second.\n\n- v=f*lambda and T=1/f. Convert wavelength to metres and period to seconds.\n\n- Reflection angles are measured from the normal. Refraction is associated with a speed change; frequency stays constant at a stationary boundary.\n\n- Spectrum increasing frequency: radio, microwave, infrared, visible, ultraviolet, X-ray, gamma. All travel at the same speed in vacuum.\n\n- Link uses to absorption, transmission and penetration; discuss hazards in terms of exposure. Not all electromagnetic waves are ionising.\n\n- Separate Physics includes lenses, colour, infrared/black-body radiation and sound applications. Higher-only extensions keep their labels.\n\n- For echoes, distance to boundary=v*t/2 because the travel time includes the return journey.\n\n- Measure several wavelengths or periods, then divide; see practical pages for controls and graph interpretation."),
+    S("4.6", "Key Ideas", "Waves transfer energy without net transport of matter. Transverse vibrations are perpendicular to travel; longitudinal ones are parallel.\n\n- Amplitude is maximum displacement, not crest-to-trough height. Wavelength joins corresponding adjacent points. Frequency is cycles per second.\n\n- v=f*lambda and T=1/f. Convert wavelength to metres and period to seconds.\n\n- Reflection angles are measured from the normal. Refraction is associated with a speed change; frequency stays constant at a stationary boundary.\n\n- Spectrum increasing frequency: radio, microwave, infrared, visible, ultraviolet, X-ray, gamma. All travel at the same speed in vacuum.\n\n- Link uses to absorption, transmission and penetration; discuss hazards in terms of exposure. Not all electromagnetic waves are ionising.\n\n- Separate Physics includes lenses, colour, infrared/black-body radiation and sound applications. Higher-only extensions keep their labels.\n\n- Separate Physics Higher: for echoes, distance to boundary=v*t/2 because the travel time includes the return journey.\n\n- Measure several wavelengths or periods, then divide; see practical pages for controls and graph interpretation."),
     S("4.6.1.1", "Transverse and longitudinal waves", "Waves transfer energy without net transport of the medium. Transverse vibration is perpendicular to travel; longitudinal vibration is parallel, producing compressions and rarefactions.\n\nWorked explanations\n- Sound in air is longitudinal: air oscillates locally while pressure disturbances travel. A floating marker on a ripple tank oscillates as wave energy passes; it does not travel across the tank with each crest.\n\nExam check\n- Electromagnetic waves are transverse and need no material medium. Wavelength in a longitudinal diagram is the spacing between successive compressions, not compression to rarefaction."),
     S("4.6.1.2", "Wave properties", "Amplitude is maximum displacement from equilibrium. Wavelength is spacing between corresponding adjacent points. Frequency is cycles per second (Hz), period is seconds per cycle.\n- v=f*lambda, f=v/lambda, lambda=v/f; T=1/f. Speed in m/s, wavelength in m.\n\nWorked examples\n- f=5 Hz and wavelength=0.080 m give speed=0.40 m/s. A 250 Hz oscillation has period 0.0040 s.\n\nPractical and exam check\n- Measure across several wavelengths and divide by their number; time many cycles to reduce timing uncertainty. Do not confuse amplitude with crest-to-trough height, which is twice the amplitude."),
     S("4.6.1.3", "Reflection of waves", "Angle of incidence equals angle of reflection, measured from the normal perpendicular to the boundary. Energy can be reflected, absorbed or transmitted.\n\nWorked example\n- A ray 30 degrees to a mirror surface is 60 degrees to the normal; its reflection angle is 60 degrees to the normal. A rough surface reflects in different directions because local normals differ.\n\nPractical\n- Trace mirror position, incident and reflected rays using separated points; draw the normal and measure several angles. Keep the beam narrow and avoid parallax. Each local reflection still obeys the rule on a rough surface."),
@@ -447,12 +531,28 @@ static const Topic phys_space[] = {
 #undef SCIENCE_MORE
 #define SCIENCE_MORE "\n\nUnderstand the mechanism\n- Use physical quantities and units consistently. A proportional relationship is supported by a straight line through the origin; a straight line with an intercept represents a different relationship. Inspect axes and scales before drawing a conclusion.\n\nApply your understanding\n- Check whether a result is plausible using a rough estimate, its sign and units. State assumptions such as negligible resistance, constant acceleration or an isolated system when these determine which model can be applied."
 static const Topic phys_key[] = {
-    S("4.9", "Physics key ideas", "Use models of particles, fields, interactions and energy to explain observations. State the system and assumptions before applying conservation of energy or momentum.\n- Distinguish scalar from vector, rate from quantity, and direct from inverse proportionality. A straight graph through the origin supports direct proportion; inspect labels and units before using gradients or areas.\n\nWorked approach\n- Identify the unknown; select the equation; convert measurements; rearrange; substitute; calculate; include unit and direction; check plausibility. For 12 N resultant and 3 kg, a=12/3=4 m/s^2.\n\nExam check\n- An explanation needs the causal links, not just a key word. Separate observation from interpretation and random uncertainty from systematic error. Use each chapter's Key Ideas for rapid recall, then its detailed pages for practice.")
+    K("4.9",
+      "Models represent features that are useful for a question. The particle model explains pressure and changes of state. The field model explains forces at a distance."
+      "\n\n- Energy is conserved. Identify the system, initial store, final store and transfer pathway. Dissipation spreads energy into surroundings."
+      "\n\n- Charge is conserved in circuits. Potential difference is energy per charge; current is charge flow per second."
+      "\n\n- Motion depends on resultant force. Use arrows and signs consistently so directions stay clear."
+      "\n\n- A wave transfers energy and information. Distinguish amplitude, wavelength, frequency and speed before selecting a formula."
+      "\n\n- Separate measurements from conclusions. A straight line through the origin supports direct proportion. A gradient uses changes and has units based on the graph axes."
+      "\n\n- State assumptions, such as negligible resistance or constant acceleration. Check the answer's units, direction and size.")
 };
 
 #undef SCIENCE_MORE
 #define SCIENCE_MORE "\n\nUnderstand the mechanism\n- Identify the quantity measured directly and any quantity calculated from it. Select instruments with an appropriate range and resolution, check zero readings, and control variables that could change the measured relationship.\n\nApply your understanding\n- Repeat measurements, plot suitable graphs and use a large triangle for a gradient. An anomalous point needs investigation. Averaging helps reduce random variation, while a systematic offset requires identifying and correcting its cause."
 static const Topic phys_practicals[] = {
+    K("RP",
+      "Specific heat capacity: record mass, electrical energy and temperature rise. Insulate the block to reduce heat loss. Use E=m*c*dT."
+      "\n\n- Resistance: change the length of one wire while keeping its material and thickness fixed. Calculate V/I and limit heating."
+      "\n\n- I-V: place the ammeter in series and voltmeter across the component. Record values for both polarities and inspect the axes."
+      "\n\n- Density: use a balance and a suitable volume method. For a submerged object use final minus initial water reading."
+      "\n\n- Springs and motion: measure extension from original length. For F=m*a, control total moving mass when varying force and account for friction."
+      "\n\n- Wave speed: measure across several wavelengths and use source frequency or time multiple periods. Apply v=f*lambda."
+      "\n\n- Separate Physics: compare thermal insulation with matched starting conditions, use a normal for reflection/refraction measurements, and compare infrared surfaces at fixed temperature and geometry."
+      "\n\n- Every investigation needs suitable instruments, enough data, controlled variables, repeats and a conclusion supported by measurements."),
     S("RP1", "Specific heat capacity", "Specific heat capacity is the energy needed to raise the temperature of 1 kg by 1 degree C. Units J/(kg C), or J/(kg K) for temperature changes.\n- E=m*c*dT. E in joules, m in kilograms, dT=final temperature-initial temperature. Rearrange c=E/(m*dT), m=E/(c*dT), dT=E/(m*c).\n- A larger mass or specific heat capacity needs more energy for the same rise. Temperature is not a measure of total energy.\n\nWorked examples\n- For 0.60 kg aluminium, c=900 J/(kg C), warming by 15 C: E=0.60*900*15=8100 J. A 90 W heater takes t=8100/90=90 s if all energy heats the block.\n- A 0.50 kg sample receives 6000 J and rises from 18 C to 28 C. dT=10 C; c=6000/(0.50*10)=1200 J/(kg C).\n\nRequired practical\n- Measure block mass on a zeroed balance. Insert an immersion heater and thermometer in the holes, improve thermal contact, insulate, and measure initial temperature. Supply energy using a joulemeter or measured V*I*t. Record a range of energy and temperature readings, allow readings to settle, and plot rise against energy.\n- Keep block mass, heater contact and insulation fixed. The gradient of rise against energy is 1/(m*c). Repeat and compare gradients. Heat escaping means less of the measured input heats the block, so an uncorrected c estimate is too high.\n- Handle hot equipment safely; switch off before moving it. Use temperature rise, not final temperature, and do not apply this equation across a state change without splitting stages."),
     S("RP2", "Thermal insulation", "Compare the rate of energy transfer for matched hot-water containers with different insulation. Use identical container shape, water mass, starting temperature, room conditions and measurement intervals.\n\nMethod and reasoning\n- Wrap containers with the chosen material/layers, add hot water safely, fit lids if used consistently, and record temperature at fixed times. Plot cooling curves and compare drops over the same interval or gradients at matched temperatures. Repeat.\n\nWorked interpretation\n- One sample drops 12 C in 10 min and another 7 C under matched conditions. The second cooled less in that interval, supporting better insulation in that setup.\n\nExam check\n- A changing temperature difference changes cooling rate. Do not compare slopes at very different temperatures and blame material alone. Control thickness if investigating material rather than number of layers."),
     S("RP3", "Resistance of wires and circuits", "Measure paired voltage and current; R=V/I. For wire length, keep material, cross-section and temperature fixed. An ammeter goes in series and voltmeter across the tested length.\n\nMethod and reasoning\n- Fix the wire along a ruler, use secure contacts, vary the test length and take repeated readings. Keep current low and switch off between readings to limit heating. Plot R against length; a linear trend through the origin supports proportionality.\n\nWorked example\n- At 1.2 V and 0.30 A, R=4 ohms. Twice the uniform wire length should give about 8 ohms at equal temperature. Compare series resistance sums and parallel branch behaviour separately.\n\nExam check\n- Contact resistance can cause an intercept. Repeats do not remove this systematic contribution. Do not change wire thickness while claiming to test length alone."),
@@ -468,6 +568,15 @@ static const Topic phys_practicals[] = {
 #undef SCIENCE_MORE
 #define SCIENCE_MORE "\n\nUnderstand the mechanism\n- Proton number defines the element; electron arrangement helps explain chemical behaviour. Isotopes differ in neutron number. In an ordinary chemical reaction, atoms are rearranged and the nuclei retain their identity.\n\nApply your understanding\n- Distinguish an element, a compound and a mixture. Compounds have elements chemically combined in fixed proportions. Mixtures can contain variable proportions and can be separated using differences in physical properties."
 static const Topic chem_atoms[] = {
+    K("4.1",
+      "The proton number identifies the element. The mass number is protons plus neutrons. Isotopes have the same proton number but different numbers of neutrons."
+      "\n\n- Atoms are neutral. Forming ions changes the number of electrons, not the nucleus. Losing electrons gives a positive ion; gaining gives a negative one."
+      "\n\n- The periodic table is ordered by proton number. In the main groups, elements share an outer-electron pattern and therefore have similar reactions."
+      "\n\n- Nuclear scattering supported a tiny positive nucleus. New evidence prompted scientists to replace older models and later account for neutrons."
+      "\n\n- Separate mixtures using differences in physical properties: filtration for solids in liquids, distillation for boiling points and chromatography for different affinities."
+      "\n\n- Balance equations by adjusting coefficients. Changing small numbers in a formula changes the substance."
+      "\n\n- Group 1 metals lose an electron, and reactivity generally increases down the group. Group 7 halogens gain an electron, and reactivity generally decreases down the group."
+      "\n\n- Group 0 atoms have full outer shells. Their boiling points increase down the group. Separate Chemistry: transition metals often form coloured compounds and can act as catalysts."),
     S("4.1.1.1", "Atoms, elements and compounds", "An element contains one type of atom. Compounds contain elements chemically joined in fixed proportions and can be separated by reactions. Use element symbols, formulae, word and balanced symbol equations. Change coefficients when balancing."
       "\n\n- " "Element symbols start with a capital and may include a lowercase second letter. In 2H2O, the coefficient applies to both atoms in the formula: four H and two O atoms total."),
     H("4.1.1.1", "Ionic and half equations", "In a net ionic equation remove unchanged spectator ions. Balance charge and atoms in half equations using electrons. For example, Ag+ + Cl- -> AgCl(s)."
@@ -505,6 +614,15 @@ static const Topic chem_atoms[] = {
 #undef SCIENCE_MORE
 #define SCIENCE_MORE "\n\nUnderstand the mechanism\n- Explain a property through structure, bonding and the particles that move. In metals, delocalised electrons carry charge. Ionic solids conduct when ions become free to move in a melt or solution.\n\nApply your understanding\n- Melting a simple molecular substance overcomes forces between molecules. It usually leaves covalent bonds within molecules intact. Giant structures need a different explanation because strong bonds extend through the structure."
 static const Topic chem_bonds[] = {
+    K("4.2",
+      "Ionic bonding is attraction between oppositely charged ions. A giant ionic lattice has a high melting point and conducts when ions are free to move, such as in a melt or solution."
+      "\n\n- Covalent bonding is a shared pair of electrons. In a simple molecule, melting or boiling overcomes intermolecular forces, so the covalent bonds remain intact."
+      "\n\n- Giant covalent structures have many strong bonds. Diamond is hard. Graphite has layers that slide, plus delocalised electrons that carry charge."
+      "\n\n- Metals have positive ions held by attraction to delocalised electrons. Their mobile electrons explain electrical conductivity. Different-sized atoms can make alloys harder by disrupting the layers."
+      "\n\n- Polymers contain long molecules. Strong covalent bonds join each chain, while forces between chains affect bulk properties."
+      "\n\n- State symbols describe physical state: (s), (l), (g) and (aq). An aqueous substance is dissolved in water."
+      "\n\n- Use models carefully: dot-and-cross diagrams show outer electrons, but do not show actual size, movement or a three-dimensional lattice accurately."
+      "\n\n- Separate Chemistry: nanoparticles have a large surface-area-to-volume ratio. Compare possible benefits with unknown effects rather than treating size alone as proof of safety or risk."),
     S("4.2.1.1", "Ionic, covalent and metallic bonds", "Ionic bonding is attraction between oppositely charged ions. Covalent bonding shares electron pairs. Metallic bonding attracts positive metal ions to delocalised electrons."
       "\n\n- " "Identify the particles before describing the force. Ionic attractions involve ions; a metallic lattice includes delocalised electrons; covalent bonds involve shared pairs."),
     S("4.2.1.2", "Ion formation", "Metals lose electrons and non-metals gain them. Use outer-shell dot-and-cross diagrams and brackets with charges. Group 1 forms +1, group 2 +2, group 6 -2 and group 7 -1."
@@ -548,6 +666,15 @@ static const Topic chem_bonds[] = {
 #undef SCIENCE_MORE
 #define SCIENCE_MORE "\n\nUnderstand the mechanism\n- Track the substance and unit at every stage. Relative formula mass sums relative atomic masses with the correct atom counts. Moles measure amount of substance and connect mass, concentration and reaction ratios.\n\nApply your understanding\n- A balanced equation gives mole ratios. Convert the known quantity to moles, apply the coefficient ratio, then convert to the required mass, concentration or volume. Check that a percentage has been divided or multiplied by 100 at the appropriate step."
 static const Topic chem_amount[] = {
+    K("4.3",
+      "Relative formula mass Mr is the sum of relative atomic masses, counting every atom in the formula. Multiply brackets by their subscript."
+      "\n\n- A balanced equation conserves atoms. The measured mass can change in an open container if gas enters or leaves."
+      "\n\n- Concentration in g/dm^3 is mass in grams divided by volume in dm^3. Convert cm^3 to dm^3 by dividing by 1000."
+      "\n\n- Higher only: amount in moles is mass divided by molar mass. Use coefficient ratios to move from moles of one substance to another."
+      "\n\n- Higher only: identify a limiting reactant by comparing available moles relative to the balanced coefficients. The smallest mass is not always limiting."
+      "\n\n- Separate Chemistry: percentage yield compares actual mass with theoretical mass. Loss in transfer or incomplete reaction can reduce actual yield."
+      "\n\n- Separate Chemistry: atom economy compares the formula masses of desired products with those of all products, using coefficients. Yield and atom economy measure different things."
+      "\n\n- Separate Chemistry Higher: molar concentration is amount divided by volume in dm^3. At room temperature and pressure one mole of gas occupies about 24 dm^3."),
     S("4.3.1.1", "Mass conservation and balancing", "No atoms are created or destroyed in a chemical reaction. Balance each element using whole-number coefficients without changing formulae. Total mass is conserved in a closed system."
       "\n\n- " "For Al + O2 -> Al2O3, use 4Al + 3O2 -> 2Al2O3. Changing a subscript would change the substance rather than balance it."),
     S("4.3.1.2", "Relative formula mass", "Mr is the sum of the relative atomic masses for all atoms in a formula. For a balanced equation the sum of relative masses including coefficients is the same on both sides."
@@ -732,6 +859,15 @@ static const Topic chem_changes[] = {
 #undef SCIENCE_MORE
 #define SCIENCE_MORE "\n\nUnderstand the mechanism\n- Exothermic reactions transfer energy to the surroundings; endothermic reactions take energy from them. Reaction profiles compare reactant and product energies and show the activation energy barrier.\n\nApply your understanding\n- Breaking bonds requires energy, and forming bonds releases energy. An estimated overall energy change is energy needed to break bonds minus energy released on forming bonds. A catalyst changes the pathway and activation energy."
 static const Topic chem_energy[] = {
+    K("4.5",
+      "Exothermic reactions transfer energy to the surroundings, raising their temperature. Endothermic reactions take in energy and cool them."
+      "\n\n- The reactant and product levels on a reaction profile show the overall energy change. The climb from the reactant level to the peak is the activation energy."
+      "\n\n- An exothermic profile ends lower than it starts; an endothermic profile ends higher. Both can have an activation energy."
+      "\n\n- A catalyst lowers activation energy using another pathway. It does not alter the starting and final energy levels."
+      "\n\n- To compare temperature changes, control starting temperature, amounts, concentration and heat losses. Read the maximum or minimum after mixing."
+      "\n\n- Higher only: breaking bonds requires energy; forming bonds releases it. Bond energy change = total for bonds broken - total for bonds formed."
+      "\n\n- Separate Chemistry: cells transfer chemical energy electrically. A battery consists of cells connected together."
+      "\n\n- Separate Chemistry: hydrogen fuel cells produce water during operation. Consider how hydrogen is obtained and stored when comparing them with rechargeable cells."),
     S("4.5.1.1", "Exothermic and endothermic", "Exothermic reactions warm the surroundings, as in combustion and many neutralisations. Endothermic reactions take energy from the surroundings, as in some dissolving processes. Applications include hot and cold packs."
       "\n\n- " "A thermometer measures the surroundings' temperature change. Apparatus also absorbs energy, so identical insulation and volumes matter for comparisons."),
     S("4.5.1.2", "Reaction energy profiles", "The height from reactants to the peak represents activation energy. Products below reactants indicate an exothermic change; products above them indicate an endothermic change."
@@ -749,6 +885,15 @@ static const Topic chem_energy[] = {
 #undef SCIENCE_MORE
 #define SCIENCE_MORE "\n\nUnderstand the mechanism\n- Rate depends on successful collisions between reacting particles. Concentration and pressure can change collision frequency; temperature also changes the fraction of particles with sufficient energy to react.\n\nApply your understanding\n- Use a tangent for an instantaneous rate and change divided by time for a mean rate. At dynamic equilibrium, forward and reverse reactions continue at equal rates, so concentrations remain constant in a closed system."
 static const Topic chem_rates[] = {
+    K("4.6",
+      "Rate is the quantity of reactant used or product formed divided by time. State whether you measured mass, volume or another quantity."
+      "\n\n- Steeper slopes show faster rates. A plateau means the measured quantity has stopped changing. Higher only: a tangent gives the rate at one point."
+      "\n\n- Particles need to collide with sufficient energy. Concentration, gas pressure and surface area affect collision frequency."
+      "\n\n- Higher temperature increases the fraction of collisions above activation energy as well as collision frequency. Explain both effects."
+      "\n\n- A catalyst provides a pathway with lower activation energy. It is not used up overall and speeds the approach to equilibrium."
+      "\n\n- Reversible reactions can run in both directions. At dynamic equilibrium in a closed system, forward and reverse rates are equal and concentrations stay constant."
+      "\n\n- Higher only: at equilibrium an increase in temperature favours the endothermic direction. For gases, increased pressure favours the side with fewer gas molecules."
+      "\n\n- Higher only: changing concentration can shift equilibrium. A catalyst changes rates in both directions without changing the equilibrium position."),
     S("4.6.1.1", "Reaction rates and graphs", "Mean rate = quantity used or produced divided by time. Typical units are g/s or cm^3/s. On an amount-time graph a steeper tangent means a faster rate; a plateau means the amount stops changing."
       "\n\n- " "If gas volume rises by 30 cm^3 over the first 15 s, mean rate is 2 cm^3/s. A plateau indicates no further measured product under those conditions."),
     H("4.6.1.1", "Instantaneous rate in mol/s", "Draw a tangent at the required time and calculate rise/run from two points on it. If the quantity is in moles the rate is mol/s. Use a positive rate for the magnitude of reactant consumption."
@@ -778,6 +923,15 @@ static const Topic chem_rates[] = {
 #undef SCIENCE_MORE
 #define SCIENCE_MORE "\n\nUnderstand the mechanism\n- Connect a displayed or structural formula with its functional group and reaction. A homologous series shares a functional group, general formula and similar chemistry, with a trend in physical properties.\n\nApply your understanding\n- Write reactants and products clearly and conserve every atom. Distinguish complete combustion from incomplete combustion, and addition reactions from substitution or polymerisation. Include conditions when they are part of the required reaction."
 static const Topic chem_organic[] = {
+    K("4.7",
+      "Crude oil is a finite mixture of hydrocarbons. Fractional distillation separates groups with similar boiling ranges. Shorter chains generally have lower boiling points."
+      "\n\n- Alkanes have only single C-C bonds and the general formula CnH(2n+2). Alkenes have a C=C bond. Simple open-chain alkenes with one double bond have formula CnH2n."
+      "\n\n- In a displayed formula, every atom and bond is visible. Carbon forms four bonds, oxygen two and hydrogen one. Butane and methylpropane are different structures with the same molecular formula."
+      "\n\n- Complete hydrocarbon combustion produces carbon dioxide and water. Limited oxygen can produce carbon monoxide or carbon. Cracking gives shorter hydrocarbons, including alkenes."
+      "\n\n- Separate Chemistry: alkenes take part in addition across the double bond. Alcohols have an -OH group; carboxylic acids have -COOH. Alcohol plus carboxylic acid can form an ester and water."
+      "\n\n- Separate Chemistry Higher: carboxylic acids only partially ionise in water. Weak describes ionisation, and dilute describes concentration."
+      "\n\n- Separate Chemistry: addition polymerisation opens alkene double bonds and links monomers. Draw repeat units with bonds through the brackets."
+      "\n\n- Separate Chemistry Higher: condensation polymerisation links suitable functional groups and releases a small molecule. Amino acids form polypeptides by condensation. DNA is a natural polymer of nucleotides."),
     S("4.7.1.1", "Crude oil and alkanes", "Crude oil is a finite mixture of hydrocarbons. Most are alkanes, saturated chains with general formula CnH(2n+2). Learn methane, ethane, propane and butane and recognise their displayed formulae."
       "\n\n- " "A hydrocarbon contains hydrogen and carbon only. The alkane series has the same general formula and broadly similar reactions, with trends as the chain grows."),
     S("4.7.1.2", "Fractional distillation", "Heating vaporises much of crude oil. A tower is hotter at the bottom and cooler at the top; fractions condense over different boiling ranges. Fractions provide fuels and petrochemical feedstocks."
@@ -809,6 +963,15 @@ static const Topic chem_organic[] = {
 #undef SCIENCE_MORE
 #define SCIENCE_MORE "\n\nUnderstand the mechanism\n- Report the observation separately from the chemical conclusion. A colour change, precipitate or gas test gives evidence for a particular substance only when the reagent and conditions are appropriate.\n\nApply your understanding\n- Use separate samples for tests that would interfere with each other. In chromatography, compare spots under the same conditions, measure to the solvent front from the baseline, and account for more than one substance in a mixture."
 static const Topic chem_analysis[] = {
+    K("4.8",
+      "A pure substance is a single element or compound. It has a characteristic melting or boiling point. A mixture can melt or boil over a range."
+      "\n\n- A formulation is a mixture designed for a job, with ingredients in measured proportions."
+      "\n\n- Chromatography separates substances according to how strongly they interact with the stationary phase and the moving solvent."
+      "\n\n- Rf=distance moved by spot/distance moved by solvent front. Measure both from the pencil baseline and compare results under the same conditions."
+      "\n\n- A lit splint gives a squeaky pop with hydrogen. Oxygen relights a glowing splint. Carbon dioxide turns limewater cloudy. Chlorine bleaches damp litmus paper."
+      "\n\n- Separate Chemistry: flame colours identify some metal ions. Sodium is yellow and potassium is lilac. Use clean equipment to avoid contaminating the result."
+      "\n\n- Separate Chemistry: a precipitate can help identify an ion. State both reagent and observation. Use a fresh portion when different tests could interfere."
+      "\n\n- Separate Chemistry: instrumental methods can be quick and sensitive. In flame emission, line positions identify ions and intensity can help measure concentration."),
     S("4.8.1.1", "Chemical purity", "A pure substance consists of a single element or compound and has characteristic melting and boiling points. Impurities can change these values or broaden the melting range."
       "\n\n- " "A mixture often melts over a range. Compare a measured melting point with a reference value as one piece of evidence for identity and purity."),
     S("4.8.1.2", "Formulations", "A formulation is a designed mixture with carefully measured amounts to achieve particular properties. Examples include paints, fuels, cleaners, foods, medicines and fertilisers."
@@ -842,6 +1005,15 @@ static const Topic chem_analysis[] = {
 #undef SCIENCE_MORE
 #define SCIENCE_MORE "\n\nUnderstand the mechanism\n- Separate a source of a gas from its effect. Combustion can release carbon dioxide and other pollutants, while different pollutants have different impacts on health, materials and ecosystems.\n\nApply your understanding\n- Greenhouse gases absorb outgoing infrared radiation. This differs from ozone depletion. Explain a claim about climate using the evidence, its uncertainty and the distinction between a short-term fluctuation and a longer-term trend."
 static const Topic chem_atmosphere[] = {
+    K("4.9",
+      "Today's dry atmosphere is roughly four fifths nitrogen and one fifth oxygen, with smaller amounts of other gases."
+      "\n\n- Models suggest gases from early volcanic activity, oceans forming, carbon dioxide being removed from the air and oxygen increasing after photosynthesis evolved."
+      "\n\n- Greenhouse gases absorb some outgoing infrared radiation. Carbon dioxide, methane and water vapour help keep Earth warm."
+      "\n\n- Burning fossil fuels increases carbon dioxide. Agriculture and waste can produce methane. Use evidence over time instead of treating one weather event as proof of a trend."
+      "\n\n- A carbon footprint counts greenhouse gas emissions associated with an activity or product. State what stages are included when comparing footprints."
+      "\n\n- Carbon monoxide forms during incomplete combustion and is toxic. Particulates can damage lungs and affect sunlight reaching the ground."
+      "\n\n- Sulfur dioxide and nitrogen oxides can contribute to acid rain. Nitrogen oxides can form at high temperatures in air."
+      "\n\n- Explain solutions with the source, change and effect. For example, combusting less fossil fuel can reduce carbon dioxide emissions."),
     S("4.9.1.1", "The atmosphere today", "Dry air is about 78% nitrogen, 21% oxygen and about 1% other gases, mainly argon with a small carbon dioxide fraction. Water vapour varies."
       "\n\n- " "The percentages are approximate proportions in dry air. Water vapour varies with location and conditions, making wet air composition a little different."),
     S("4.9.1.2", "Early atmosphere", "Volcanic emissions probably supplied carbon dioxide, water vapour and nitrogen, with very little oxygen at first. As Earth cooled, water condensed and oceans formed. Evidence about the early atmosphere is incomplete."
@@ -867,6 +1039,16 @@ static const Topic chem_atmosphere[] = {
 #undef SCIENCE_MORE
 #define SCIENCE_MORE "\n\nUnderstand the mechanism\n- Compare a process using its feedstocks, energy use, useful output and waste. A renewable resource is replenished on a suitable timescale, while a finite resource is depleted as it is used.\n\nApply your understanding\n- Life-cycle assessments include raw materials, manufacture, use and disposal. State the boundary and data used before comparing alternatives. Recycling can reduce extraction and waste but also requires collection, sorting and processing."
 static const Topic chem_resources[] = {
+    K("4.10",
+      "Finite resources are used up faster than they form. Renewable resources replenish on a relevant timescale. Compare extraction, energy use and waste."
+      "\n\n- Potable water is safe to drink but can contain dissolved substances. Filtration removes suspended solids; sterilisation reduces pathogens."
+      "\n\n- Desalination removes dissolved salts and needs energy. Waste water treatment removes solids and uses biological treatment to break down organic material."
+      "\n\n- Higher only: phytomining and bioleaching can obtain metals from low-grade material. Compare impact and speed against conventional extraction."
+      "\n\n- A life-cycle assessment covers raw materials, manufacture, use and disposal. Use the same function or service when comparing two products."
+      "\n\n- Reduce, reuse and recycle to lower demand for new resources. Recycling can still require collecting, sorting and energy."
+      "\n\n- Separate Chemistry: coatings prevent corrosion by keeping out water and oxygen. Zinc also offers sacrificial protection to iron when a coating is scratched."
+      "\n\n- Separate Chemistry: choose alloys, polymers, ceramics and composites for their properties. For fertilisers, connect N, P and K supply to plant requirements."
+      "\n\n- Separate Chemistry Higher: Haber conditions balance rate, equilibrium yield and cost. A catalyst speeds the approach to equilibrium."),
     S("4.10.1.1", "Resources and sustainability", "Natural resources supply food, water, energy and materials. Renewable resources can replace themselves on useful timescales; finite resources cannot. Sustainable decisions consider current needs and future access."
       "\n\n- " "Compare resource extraction with replenishment. Using a renewable resource faster than it regenerates can still be unsustainable."),
     S("4.10.1.2", "Potable water", "Potable water has safe levels of dissolved substances and microbes. Freshwater treatment uses filtration and sterilisation. Desalination by distillation or reverse osmosis needs energy."
@@ -896,13 +1078,27 @@ static const Topic chem_resources[] = {
 #undef SCIENCE_MORE
 #define SCIENCE_MORE "\n\nUnderstand the mechanism\n- Explain changes using particles, atoms and electrons. Chemical reactions rearrange atoms, and balanced equations express conservation of atoms. A coefficient changes the number of formula units; a subscript changes the formula itself.\n\nApply your understanding\n- Relate an observation to a model and give the intermediate reasoning. For example, explain a change in conductivity by identifying the charge carriers and whether they can move, rather than stating only that bonding has changed."
 static const Topic chem_key[] = {
-    S("4.11", "Chemistry key ideas", "Explain patterns using particles, bonding, energetics and electron structure. Equations represent changes with conserved atoms. Rates depend on collisions, and reactions can reach equilibrium."
-      "\n\n- " "For an explanation, connect the observed property or change to the particles involved and the relevant bonding, energy or collision model.")
+    K("4.11",
+      "The periodic table links electron structure to chemical properties. Proton number identifies the element, while electrons account for bonding and ion formation."
+      "\n\n- Properties depend on structure and bonding. Explain why particles can move, what attractions act and which attractions must be overcome."
+      "\n\n- Atoms are conserved in chemical reactions. Balance equations first and keep mass, amount and concentration units consistent."
+      "\n\n- Energy transfers and reaction rates answer different questions. A catalyst changes the pathway and rate but leaves the overall energy change the same."
+      "\n\n- Reversible changes can reach dynamic equilibrium. What happens to the rate is distinct from what happens to the equilibrium position."
+      "\n\n- Use a named observation to support a chemical conclusion. A colour change or precipitate needs the correct reagent and conditions.")
 };
 
 #undef SCIENCE_MORE
 #define SCIENCE_MORE "\n\nUnderstand the mechanism\n- Give a repeatable sequence with measured quantities, suitable apparatus and a clear endpoint. State how a hazard is controlled and why the control reduces the relevant risk.\n\nApply your understanding\n- Select measurements that test the intended relationship. Rinse equipment appropriately, record values with units and repeat measurements. Discuss losses, contamination and heat exchange when they affect the quantity being calculated."
 static const Topic chem_practicals[] = {
+    K("RP",
+      "Soluble salt preparation: add excess insoluble solid to consume acid, filter off the excess, concentrate the solution and allow crystals to form."
+      "\n\n- Separate Chemistry titration: record initial and final burette readings and repeat for concordant results. Higher only: use the balanced ratio for concentration calculations."
+      "\n\n- Electrolysis: identify the ions and electrode polarity. Record observations separately before inferring electrode products."
+      "\n\n- Temperature changes: use matched starting conditions and insulation. Record the maximum or minimum temperature, then calculate the change."
+      "\n\n- Rates: change one factor. Collect gas, measure mass loss or use a consistent endpoint. Quote the rate method and units."
+      "\n\n- Chromatography: draw the baseline in pencil and keep solvent below it. Mark the solvent front and measure distances from the baseline."
+      "\n\n- Separate Chemistry ion tests: use separate portions, note colours and precipitates and compare positive tests under matched conditions."
+      "\n\n- Water analysis: distinguish appearance, pH and dissolved solids. Use a measured sample volume and discuss the limits of each test."),
     S("RP1", "Making a pure soluble salt", "Prepare a soluble salt from excess insoluble oxide or carbonate and dilute acid. Explain excess, filtration, partial evaporation, crystallisation and drying."
       "\n\n- " "Warm the acid as directed in a supervised experiment, use excess insoluble base and filter before concentrating. Prevent spitting and avoid evaporating the solution to dryness."),
     S("RP2", "Acid-alkali titration", "Compare measured reacting volumes using a pipette, burette and indicator. Carry out a rough determination then repeat for concordant results and calculate a mean."
@@ -926,6 +1122,14 @@ static const Topic chem_practicals[] = {
 #undef SCIENCE_MORE
 #define SCIENCE_MORE "\n\nUnderstand the mechanism\n- A testable explanation makes predictions that can be compared with observations. Identify the variable changed, the outcome measured and other influences controlled. Describe the evidence needed to support the conclusion.\n\nApply your understanding\n- Quote values from the data, with units, when comparing results. Distinguish random variation from systematic error. A large sample improves an estimate, but repeated measurements alone cannot remove an incorrectly calibrated instrument's bias."
 static const Topic science_skills[] = {
+    K("3",
+      "State a testable prediction and explain its scientific basis. Distinguish a reading you observed from the conclusion you inferred."
+      "\n\n- Change the independent variable, measure the dependent variable and control other important factors. Explain what each control prevents."
+      "\n\n- Repeat readings to assess spread. Investigate anomalies before deciding whether to exclude them. Repeats cannot fix a consistent offset."
+      "\n\n- Accuracy is closeness to the true value. Precision concerns the spread of repeated readings. Resolution is the smallest change the instrument can distinguish."
+      "\n\n- Label axes with quantities and units. Use separated points to calculate a gradient. A trend shows association and needs other evidence to establish a cause."
+      "\n\n- Convert units before substituting. For a percentage change divide by the starting value, then multiply by 100."
+      "\n\n- Evaluate a method by naming a specific limitation, how it affects the result, and a practical change that addresses it."),
     S("3.1", "Developing scientific explanations", "A hypothesis gives a testable prediction. Models represent important features and have limits. New evidence can support or overturn an explanation. Evaluate risks, ethical implications, peer review and whether findings apply to the wider population."
       "\n\n- " "A good conclusion separates observation and interpretation. Evaluate an explanation using quality, quantity, independence and consistency of evidence."),
     S("3.2", "Designing an investigation", "Change the independent variable, measure the dependent variable and control other influences. Choose suitable apparatus, range, intervals and sample size. A control gives a baseline; repeat readings and other groups' results help assess reliability."
@@ -962,4 +1166,5 @@ static const Chapter aqa_chemistry[] = {
 };
 
 #undef H
+#undef K
 #undef S
