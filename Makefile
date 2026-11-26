@@ -1,6 +1,6 @@
 CC = arm-none-eabi-gcc
 NWLINK ?= npx --yes -- nwlink@1.0.0
-VERSION ?= 0.1.4
+VERSION ?= 0.1.4-r1
 BUILD = build/$(VERSION)
 RELEASE_DIR = releases
 APP = $(RELEASE_DIR)/numai-$(VERSION).nwa

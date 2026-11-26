@@ -2,13 +2,13 @@
 
 Revision notes, equation sheets, worked examples, scientific solvers and a CAS calculator in a native **320 × 240 NumWorks external app**. This is the **original NumAI project**; [NumAI for Casio](https://github.com/cis5123467-sudo/numai-casio) is its related Graph Math+ port.
 
-Current release: **v0.1.4**. Target: **NumWorks N0120 running Epsilon 24.8.0**.
+Current release: **v0.1.4-r1**. Target: **NumWorks N0120 running Epsilon 24.8.0**.
 
-[Download the latest release](https://github.com/cis5123467-sudo/numai/releases/latest) · [Download v0.1.4](https://github.com/cis5123467-sudo/numai/releases/download/0.1.4/numai-0.1.4.nwa) · [Detailed release notes](https://github.com/cis5123467-sudo/numai/releases/tag/0.1.4) · [Report an issue](https://github.com/cis5123467-sudo/numai/issues)
+[Download the latest release](https://github.com/cis5123467-sudo/numai/releases/latest) · [Download v0.1.4-r1](https://github.com/cis5123467-sudo/numai/releases/download/0.1.4-r1/numai-0.1.4-r1.nwa) · [Detailed release notes](https://github.com/cis5123467-sudo/numai/releases/tag/0.1.4-r1) · [Report an issue](https://github.com/cis5123467-sudo/numai/issues)
 
 ## Install
 
-1. Download **`numai-0.1.4.nwa`** from GitHub Releases. Choose the `.nwa` asset rather than GitHub's automatic source-code archive.
+1. Download **`numai-0.1.4-r1.nwa`** from GitHub Releases. Choose the `.nwa` asset rather than GitHub's automatic source-code archive.
 2. Connect the calculator by USB and open the [NumWorks external-app installer](https://my.numworks.com/apps) using your existing supported installation setup and a WebUSB-capable browser, such as desktop Chrome or Edge.
 3. Select the calculator, add the `.nwa` file and complete the installation.
 4. Open **NumAI** from the calculator's application menu. It starts directly in **CALCULATION**; use **TOOLBOX** for courses or **VAR** for equations and CAS.
@@ -47,6 +47,8 @@ Science notes include practical and scientific-skills material. **(higher only)*
 ### Key Ideas across AQA sciences
 
 All **34 section menus** in AQA Biology, Chemistry and Physics open with **Key Ideas**. This includes the required practicals and shared scientific skills. The summaries cover whole sections and call out important definitions, relationships, equations and common mistakes, with Higher-only and separate-science labels where relevant.
+
+Press **VAR** on a **Key Ideas** page to open the linked equation fact sheets for the whole topic. The links appear below the specification reference and include relevant equations from other chapters or sheets, such as magnification in Cell Biology. Higher-only equations keep their label. **Back** from a linked fact sheet returns to the summary at the same scroll position.
 
 ### Displayed Formulae
 
@@ -259,14 +261,14 @@ make build
 make check
 ```
 
-`make build` creates **`releases/numai-0.1.4.nwa`** inside the repository. `make check` links a loader-oriented test ELF at **`build/0.1.4/numai.elf`** using nwlink. It is a packaging/linking check, not an automated runtime test.
+`make build` creates **`releases/numai-0.1.4-r1.nwa`** inside the repository. `make check` links a loader-oriented test ELF at **`build/0.1.4-r1/numai.elf`** using nwlink. It is a packaging/linking check, not an automated runtime test.
 
 The Makefile pins **nwlink 1.0.0**, generates its EADK header through nwlink and targets **Cortex-M7**, Thumb instructions and hardware floating point. C99 sources compile with size optimisation and warnings treated as errors. Icon conversion is part of the build; no local research documents or test tools are needed to compile the app.
 
 Override the version for a separately named build:
 
 ```sh
-make check VERSION=0.1.4-custom
+make check VERSION=0.1.4-r1-custom
 ```
 
 This changes the artifact name, build directory and compiled version string. It does not install the app. Transfer the `.nwa` separately through your authorised calculator installation setup. `make clean` removes local build directories.
@@ -290,7 +292,7 @@ Local `.nwa` files are kept in `releases/` and ignored by Git, along with object
 
 ## Validation and compatibility
 
-See the [v0.1.4 release notes](https://github.com/cis5123467-sudo/numai/releases/tag/0.1.4) for the current build’s emulator and package checks.
+See the [v0.1.4-r1 release notes](https://github.com/cis5123467-sudo/numai/releases/tag/0.1.4-r1) for the current build’s emulator and package checks.
 
 v0.1.3 passed ARM package inspection and targeted runtime checks using a **Cortex-M7/Unicorn harness with simulated EADK keyboard/display calls**. The harness is local development tooling and is not included in this source-only repository; the commands above are sufficient to build the app without it.
 
